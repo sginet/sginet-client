@@ -1,0 +1,38 @@
+# the binaries:
+/_sginet
+/sginet
+/xsginet
+/xsginet-linux
+/xsginet-globe
+/xsginet-globe-linux
+core
+*.bin
+tests/
+README.local
+
+# Admin tools
+upload-release-cli
+
+# all object files
+*.o
+
+# skip all backups
+*.bak
+*~
+.*.sw?
+
+# skip coverage files
+*.gcda
+*/*.gcda
+*.gcno
+*/*.gcno
+*.h.gch
+*/.dirstamp
+
+# IDE workspace configurations
+/.idea/
+/.vscode/
+
+# third party build output
+# /third_party/ncurses-*.tar.gz
+/build-*/
