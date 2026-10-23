@@ -44,6 +44,9 @@ sginet
 
 On first lanch you will be asked to register your Silicon Graphics computer.
 
+Important: Make sure your OS time and date is set correctly, or you will encounter SSL/TLS handshake errors!
+
+
 ## Terminal settings
 
 If `sginet` refuses to launch and complains about the terminal, set your `$TERM` variable to `iris-ansi` to fall back to the most basic UI.
