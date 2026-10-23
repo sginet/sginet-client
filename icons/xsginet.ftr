@@ -1,0 +1,13 @@
+#
+# Desktop file type rule for the SGINet X11/Motif client.
+# Installed in /usr/lib/filetype/install, icon in install/iconlib.
+#
+TYPE xSGINetExecutable
+    MATCH       glob("xsginet");
+    LEGEND      SGINet X11/Motif client
+    SUPERTYPE   Executable
+    CMD OPEN    $LEADER $REST
+    CMD ALTOPEN launch -c $LEADER $REST
+    ICON {
+        include("iconlib/xSGINet.fti");
+    }

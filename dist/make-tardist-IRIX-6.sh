@@ -7,6 +7,11 @@
 #   /usr/bin/sginet                 the sginet binary
 #   /usr/bin/xsginet                the X11/Motif client (subsystem x11, if built)
 #   /usr/bin/xsginet-globe          the OpenGL globe viewer (subsystem globe, if built)
+#   /usr/lib/filetype/install/xsginet.ftr, xsginet-globe.ftr
+#   /usr/lib/filetype/install/iconlib/xSGINet.fti, xSGINet-globe.fti
+#                                   desktop file type rules and icons (from icons/)
+#   /usr/lib/desktop/iconcatalog/pages/C/Applications/xsginet, xsginet-globe
+#                                   Icon Catalog entries (Applications page)
 #   /etc/init.d/sginet-daemon       init script (from daemon/sginet-daemon)
 #   /etc/config/sginet-daemon       chkconfig flag, set to "on"
 #   /etc/rc2.d/S58sginet            autostart link
@@ -51,6 +56,10 @@ SGINET=${SGINET:-$ROOT/sginet}
 XSGINET=${XSGINET:-$ROOT/xsginet}
 XSGINET_GLOBE=${XSGINET_GLOBE:-$ROOT/xsginet-globe}
 DAEMONSCRIPT=$ROOT/daemon/sginet-daemon
+ICONS=$ROOT/icons
+FTRDIR=usr/lib/filetype/install
+ICONLIBDIR=$FTRDIR/iconlib
+ICONCATDIR=usr/lib/desktop/iconcatalog/pages/C/Applications
 OUT=$ROOT/dist
 LICENSES=$OUT/LICENSES
 INSTREADME=$OUT/inst.README
@@ -74,7 +83,9 @@ if [ ! -f "$DAEMONSCRIPT" ]; then
     exit 1
 fi
 
-for f in "$LICENSES" "$INSTREADME" "$INSTREADMEHTML"; do
+for f in "$LICENSES" "$INSTREADME" "$INSTREADMEHTML" \
+         "$ICONS/xsginet.ftr" "$ICONS/xSGINet.fti" \
+         "$ICONS/xsginet-globe.ftr" "$ICONS/xSGINet-globe.fti"; do
     if [ ! -f "$f" ]; then
         echo "$f not found" 1>&2
         exit 1
@@ -124,7 +135,8 @@ fi
 echo "Work directory: $WORK"
 
 rm -rf "$WORK"
-mkdir -p "$STAGE/etc/init.d" "$STAGE/etc/config" "$STAGE/etc/rc2.d" "$STAGE/usr/bin" "$STAGE/$DOCDIR" "$DIST" || exit 1
+mkdir -p "$STAGE/etc/init.d" "$STAGE/etc/config" "$STAGE/etc/rc2.d" "$STAGE/usr/bin" "$STAGE/$DOCDIR" \
+    "$STAGE/$ICONLIBDIR" "$STAGE/$ICONCATDIR" "$DIST" || exit 1
 
 # --- staging tree ---------------------------------------------------------
 
@@ -138,6 +150,20 @@ fi
 if [ -n "$XSGINET_GLOBE" ]; then
     cp "$XSGINET_GLOBE" "$STAGE/usr/bin/xsginet-globe" || exit 1
     chmod 755 "$STAGE/usr/bin/xsginet-globe"
+fi
+
+echo "Copying desktop file type rules, icons and Icon Catalog links..."
+if [ -n "$XSGINET" ]; then
+    cp "$ICONS/xsginet.ftr" "$STAGE/$FTRDIR/xsginet.ftr" || exit 1
+    cp "$ICONS/xSGINet.fti" "$STAGE/$ICONLIBDIR/xSGINet.fti" || exit 1
+    chmod 644 "$STAGE/$FTRDIR/xsginet.ftr" "$STAGE/$ICONLIBDIR/xSGINet.fti"
+    ln -s /usr/bin/xsginet "$STAGE/$ICONCATDIR/xsginet" || exit 1
+fi
+if [ -n "$XSGINET_GLOBE" ]; then
+    cp "$ICONS/xsginet-globe.ftr" "$STAGE/$FTRDIR/xsginet-globe.ftr" || exit 1
+    cp "$ICONS/xSGINet-globe.fti" "$STAGE/$ICONLIBDIR/xSGINet-globe.fti" || exit 1
+    chmod 644 "$STAGE/$FTRDIR/xsginet-globe.ftr" "$STAGE/$ICONLIBDIR/xSGINet-globe.fti"
+    ln -s /usr/bin/xsginet-globe "$STAGE/$ICONCATDIR/xsginet-globe" || exit 1
 fi
 
 echo "Creating init script, chkconfig flag and autostart link..."
@@ -161,14 +187,22 @@ echo "Generating $IDB..."
 REMOVEOP='removeop("/etc/killall -TERM sginet 2>/dev/null; true")'
 REMOVEOP_X11='removeop("/etc/killall -TERM xsginet 2>/dev/null; true")'
 REMOVEOP_GLOBE='removeop("/etc/killall -TERM xsginet-globe 2>/dev/null; true")'
+# recompile the desktop file type database so the new rules and icons show up
+FTRMAKE='exitop("if test -r $rbase/usr/lib/filetype/Makefile; then chroot $rbase /sbin/sh -c \"cd /usr/lib/filetype; make -u > /dev/null 2>&1\"; fi; true")'
 
 (
     echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip"
     if [ -n "$XSGINET" ]; then
         echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip $REMOVEOP_X11"
+        echo "f 0644 root sys $FTRDIR/xsginet.ftr $FTRDIR/xsginet.ftr $SUBSYS_X11 $FTRMAKE"
+        echo "f 0644 root sys $ICONLIBDIR/xSGINet.fti $ICONLIBDIR/xSGINet.fti $SUBSYS_X11"
+        echo "l 0755 root sys $ICONCATDIR/xsginet $ICONCATDIR/xsginet $SUBSYS_X11 symval(/usr/bin/xsginet)"
     fi
     if [ -n "$XSGINET_GLOBE" ]; then
         echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip $REMOVEOP_GLOBE"
+        echo "f 0644 root sys $FTRDIR/xsginet-globe.ftr $FTRDIR/xsginet-globe.ftr $SUBSYS_GLOBE $FTRMAKE"
+        echo "f 0644 root sys $ICONLIBDIR/xSGINet-globe.fti $ICONLIBDIR/xSGINet-globe.fti $SUBSYS_GLOBE"
+        echo "l 0755 root sys $ICONCATDIR/xsginet-globe $ICONCATDIR/xsginet-globe $SUBSYS_GLOBE symval(/usr/bin/xsginet-globe)"
     fi
     echo "f 0755 root sys etc/init.d/sginet-daemon etc/init.d/sginet-daemon $SUBSYS $REMOVEOP"
     echo "f 0644 root sys etc/config/sginet-daemon etc/config/sginet-daemon $SUBSYS config(noupdate)"

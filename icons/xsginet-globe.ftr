@@ -1,0 +1,13 @@
+#
+# Desktop file type rule for the SGINet OpenGL globe viewer.
+# Installed in /usr/lib/filetype/install, icon in install/iconlib.
+#
+TYPE xSGINetGlobeExecutable
+    MATCH       glob("xsginet-globe");
+    LEGEND      SGINet OpenGL globe viewer
+    SUPERTYPE   Executable
+    CMD OPEN    $LEADER $REST
+    CMD ALTOPEN launch -c $LEADER $REST
+    ICON {
+        include("iconlib/xSGINet-globe.fti");
+    }
