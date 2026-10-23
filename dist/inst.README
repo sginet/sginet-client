@@ -1,0 +1,82 @@
+SGINet client
+=============
+
+SGINet is a client for Silicon Graphics MIPS computers running IRIX.
+It registers your SGI on https://sginet.flexion.io, shares its hinv
+data and online status, and lets you browse other users machines,
+take screenshots, search software packages, read the sgi.sh forum, 
+post in the shoutbox and more.
+
+This package installs:
+
+  /usr/bin/sginet                 command line client (ncurses UI)
+  /usr/bin/xsginet                X11/Motif client (subsystem x11)
+  /usr/bin/xsginet-globe          OpenGL globe of SGINet machines
+                                  (subsystem globe)
+  /etc/init.d/sginet-daemon       online status daemon (init script)
+
+
+1. Register your machine
+------------------------
+
+Before you use the X11 clients, register your SGI with the command
+line client. Open a terminal and run:
+
+  sginet
+
+On first launch you will be asked to register your SGI computer.
+
+If sginet complains about the terminal, try:  setenv TERM iris-ansi
+(sh/ksh:  TERM=iris-ansi; export TERM)
+
+Emulators: SGINet is intended for real SGI/MIPS hardware. Please 
+do not register emulators. The cloud API silently rejects requests 
+from emulators. 
+
+
+2. Start xsginet
+----------------
+
+Run xsginet only after registration with sginet is complete:
+
+  xsginet
+
+The globe viewer can be opened from the xsginet menu
+(Actions > View globe..) or started directly with:
+
+  xsginet-globe
+
+Unregistered, the globe is read-only. Register first to submit
+your machine's location.
+
+
+3. sginet-daemon (optional)
+---------------------------
+
+The sginet-daemon service reports the online status of your machine
+to the cloud every 12 minutes. It is enabled with chkconfig and starts 
+at boot, but it is NOT started by the installation. 
+After registering, start it as root with:
+
+  /etc/init.d/sginet-daemon start
+
+If you do not want your machine to report uptime, disable it with:
+
+  chkconfig sginet-daemon off
+
+
+License
+-------
+
+SGINet is licensed under the MIT License.
+Copyright (c) 2024 flexion
+
+Bundled third-party code keeps its own license:
+
+  BearSSL     MIT license
+  json-c      MIT license
+  ncurses     X11/MIT-style license
+
+The full license texts are installed in
+/usr/share/doc/sginet_client/LICENSES
+

@@ -1,0 +1,95 @@
+<HTML>
+<HEAD>
+<TITLE>SGINet client</TITLE>
+</HEAD>
+<BODY BGCOLOR="#FFFFFF" TEXT="#000000">
+
+<H1>SGINet client</H1>
+
+<P>SGINet is a client for Silicon Graphics MIPS computers running IRIX.
+It registers your SGI on <A HREF="https://sginet.flexion.io">sginet.flexion.io</A>,
+shares its <TT>hinv</TT> data and online status, and lets you browse other
+users' machines, take screenshots, search software packages, read the
+sgi.sh forum, post in the shoutbox and more.</P>
+
+<P>This package installs:</P>
+
+<TABLE BORDER=0 CELLPADDING=2>
+<TR><TD><TT>/usr/bin/sginet</TT></TD><TD>command line client (ncurses UI)</TD></TR>
+<TR><TD><TT>/usr/bin/xsginet</TT></TD><TD>X11/Motif client (subsystem x11)</TD></TR>
+<TR><TD><TT>/usr/bin/xsginet-globe</TT></TD><TD>OpenGL globe of SGINet machines (subsystem globe)</TD></TR>
+<TR><TD><TT>/etc/init.d/sginet-daemon</TT></TD><TD>online status daemon (init script)</TD></TR>
+</TABLE>
+
+<H2>1. Register your machine</H2>
+
+<P><B>Before you use the X11 clients, register your SGI with the command
+line client.</B> Open a terminal and run:</P>
+
+<PRE>
+  sginet
+</PRE>
+
+<P>On first launch you will be asked to register your SGI computer.</P>
+
+<p>Emulators: SGINet is intended for real SGI/MIPS hardware. Please 
+do not register emulators. The cloud API silently rejects requests 
+from emulators. </p>
+
+<P>If <TT>sginet</TT> complains about the terminal, try
+<TT>setenv TERM iris-ansi</TT> (sh/ksh: <TT>TERM=iris-ansi; export TERM</TT>).</P>
+
+<H2>2. Start xsginet</H2>
+
+<P>Run <TT>xsginet</TT> only after registration with <TT>sginet</TT>
+is complete:</P>
+
+<PRE>
+  xsginet
+</PRE>
+
+<P>The globe viewer can be opened from the <TT>xsginet</TT> menu
+(<I>Actions &gt; View globe..</I>) or started directly with:</P>
+
+<PRE>
+  xsginet-globe
+</PRE>
+
+<P>Unregistered, the globe is read-only. Register first to submit
+your machine's location.</P>
+
+<H2>3. sginet-daemon (optional)</H2>
+
+<P>The <TT>sginet-daemon</TT> service reports the online status of your
+machine to the cloud every 12 minutes. It is enabled with <TT>chkconfig</TT> and starts
+at boot, but it is <B>not</B> started by the installation. After
+registering, start it as root with:</P>
+
+<PRE>
+  /etc/init.d/sginet-daemon start
+</PRE>
+
+<P>If you do not want your machine to report uptime, disable it with:</P>
+
+<PRE>
+  chkconfig sginet-daemon off
+</PRE>
+
+<H2>License</H2>
+
+<P>SGINet is licensed under the MIT License.<BR>
+Copyright &copy; 2024 flexion</P>
+
+<P>Bundled third-party code keeps its own license:</P>
+
+<TABLE BORDER=0 CELLPADDING=2>
+<TR><TD>BearSSL</TD><TD>MIT license</TD></TR>
+<TR><TD>json-c</TD><TD>MIT license</TD></TR>
+<TR><TD>ncurses</TD><TD>X11/MIT-style license</TD></TR>
+</TABLE>
+
+<P>The full license texts are installed in
+<TT>/usr/share/doc/sginet_client/LICENSES</TT>.</P>
+
+</BODY>
+</HTML>

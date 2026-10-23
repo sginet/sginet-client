@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# SGINet ping daemon
+# flexion 2024
+#
+# Version 20261015-1613
+#
+# Periodically sends a sign of life to the SGINet cloud
+#
+# copy this file to /etc/init.d and run:
+# sudo chkconfig -f sginet-daemon on
+# sudo ln -s /etc/init.d/sginet-daemon /etc/rc2.d/S58sginet
+#
+
+# -- The following part is only required when running the SGUG-RSE CLI version --
+# LD_LIBRARYN32_PATH=/usr/sgug/lib32:/usr/lib32:/lib32:/usr/lib:/lib:/usr/local/lib
+# export LD_LIBRARYN32_PATH
+# PATH=/usr/sgug/bin:/usr/bin:/usr/local/bin
+# export PATH
+
+IS_ON=/etc/chkconfig
+CONFIG=/etc/config
+DAEMON="/usr/bin/sginet -s"
+PINGTEST="/usr/bin/sginet -d -p"
+
+if $IS_ON verbose; then
+        ECHO=echo
+else
+    	# For a quiet startup and shutdown
+        ECHO=:
+fi
+
+case "$1" in
+	'start')
+        if $IS_ON sginet-daemon && test -x $DAEMON ; then
+                $ECHO "[sginet-daemon] Starting up\c"
+                $DAEMON
+                $ECHO "."
+        fi
+	;;
+
+	'stop')
+        if test -x $DAEMON ; then
+                $ECHO "[sginet-daemon] Stopping\c"
+                /etc/killall -TERM sginet
+                $ECHO "."
+        fi
+	;;
+
+        'restart')
+        if $IS_ON sginet-daemon && test -x $DAEMON ; then
+                $ECHO "[sginet-daemon] Restarting\c"
+                /etc/killall -TERM sginet
+                $DAEMON
+                $ECHO "."
+        fi
+	;;
+
+        'test')
+	$PINGTEST
+	;;
+
+	*)
+	echo "usage: $0 {start|stop|restart|test}"
+        ;;
+esac

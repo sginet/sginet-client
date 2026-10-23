@@ -30,7 +30,6 @@ Emulators: SGINet is intended for real SGI/MIPS hardware. Please do not register
 
 Integrated online updater: sginet, xsginet and xsginet-globe come with an integrated updater. As root user launch with the -u option to update to the latest published version.
 
-
 ## Starting the SGINet client
 
 The tardist package will install the `sginet` executable in `/usr/bin` which should already be in the search path of a default IRIX installation.
@@ -48,16 +47,7 @@ On first lanch you will be asked to register your Silicon Graphics computer.
 ## Terminal settings
 
 If `sginet` refuses to launch and complains about the terminal, set your `$TERM` variable to `iris-ansi` to fall back to the most basic UI.
-
-Results in `winterm`:
-
-| `$TERM`     | Result                                                       |
-|-------------|--------------------------------------------------------------|
-| `rxvt`      | bad                                                          |
-| `vt100`     | borders are wrong but outline OK; F1 does not work           |
-| `xterm`     | bad                                                          |
-| `xwsh`      | borders are `---` lines, F1 works, opacity of stacked windows is bad |
-| `iris-ansi` | borders are `---` lines, ENTER/F1 do not work                |
+Best viewed with aterm or mrxvt.
 
 ## Cloud connection
 
