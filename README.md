@@ -1,6 +1,6 @@
 # SGINet client
 
-Copyright (c) 2024 flexion - licensed under the MIT License, see [License](#license).
+Copyright (c) 2024 flexion - licensed under the MIT License.
 
 ## What is this?
 
@@ -69,7 +69,7 @@ SGINet is licensed under the MIT License, see the [LICENSE](LICENSE) file for de
 
 Bundled third-party code keeps its own license:
 
-- BearSSL — MIT, see [third_party/bearssl/LICENSE.txt](third_party/bearssl/LICENSE.txt)
-- json-c — MIT, see [third_party/json-c/COPYING](third_party/json-c/COPYING)
-- ncurses — X11/MIT-style license, see `COPYING` in [third_party/ncurses-6.5.tar.gz](third_party/ncurses-6.5.tar.gz)
+- BearSSL — MIT
+- json-c — MIT
+- ncurses — X11/MIT-style license
 
