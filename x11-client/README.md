@@ -1,7 +1,7 @@
 # xSGINet client
 
 X11 motif client for SGINet.
-Please register your machine with the sginet CLI first, before you launch xsginet.
+On first start of an unregistered machine, xsginet shows a registration form.
 
 (c) flexion 2025
 

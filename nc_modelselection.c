@@ -21,11 +21,19 @@ void nc_model_selection(char *ipmodel, char *modelname) {
     ModelName *lstModelNames;
     char title[64];
     char labelOther[] ="- other, not in list -";
+    int rcIP;
 
+    lstModelNames = NULL;
+    n_count = 0;
+    selectedNo = 0;
     /* Query list of possible model names for SW IPxx type: */
-    int rcIP = cloudAPI_getIPModelNames(&lstModelNames, &n_count, ipmodel);
-    if (rcIP != RESPONSE_OK)
+    rcIP = cloudAPI_getIPModelNames(&lstModelNames, &n_count, ipmodel);
+    if (rcIP != RESPONSE_OK) {
+        /* only offer "other, not in list" */
         if (debug) fprintf(stderr, "Failed to query model names for: %s \n", ipmodel);
+        lstModelNames = NULL;
+        n_count = 0;
+    }
 
     /* start cursing */
     initscr();
@@ -118,11 +126,12 @@ void nc_model_selection(char *ipmodel, char *modelname) {
         nc_enter_modelname(modelname);
     } else {
         /* printf("selectedEntry[%i] = %s\n", selectedNo, lstModelNames[selectedNo].name); */
-        sprintf(modelname, "%s", lstModelNames[selectedNo].name);
+        snprintf(modelname, REG_NAME_SIZE, "%s", lstModelNames[selectedNo].name);
     }
+    if (lstModelNames) free(lstModelNames);
 }
 int validateModelnameForm(FIELD *field[], char *modelname) {
-    snprintf(modelname, 64, "%s", trim_whitespaces(field_buffer(field[0], 0)));
+    snprintf(modelname, REG_NAME_SIZE, "%s", trim_whitespaces(field_buffer(field[0], 0)));
     if (strlen(modelname) < 2) return 0;
     return 1;  /* OK */
 }

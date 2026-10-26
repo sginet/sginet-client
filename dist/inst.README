@@ -19,8 +19,7 @@ This package installs:
 1. Register your machine
 ------------------------
 
-Before you use the X11 clients, register your SGI with the command
-line client. Open a terminal and run:
+To start sginet CLI, open a terminal and run:
 
   sginet
 
@@ -37,7 +36,7 @@ from emulators.
 2. Start xsginet
 ----------------
 
-Run xsginet only after registration with sginet is complete:
+To start the X11 application:
 
   xsginet
 

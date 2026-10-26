@@ -9,6 +9,7 @@
 #define GLOBE_BINARY "/usr/bin/xsginet-globe"
 
 int debug = 0;
+static int show_splash = 1; /* --nosplash */
 int G_MODE = MODE_DAEMON;
 
 char G_CLIENTID[64];
@@ -16,6 +17,7 @@ static Widget scrolled_systems_list = NULL;
 static Widget lbl_online = NULL;
 static Cursor busy_cursor = None;
 static XtIntervalId refresh_timeout_id = 0;
+static XtAppContext app;
 Widget toplevel;
 MachineListEntry *lstSystems = NULL;
 int numSystems = 0;
@@ -40,6 +42,8 @@ String fallback_resources[] = {
 
     "*screenshot_dialog*dspScreenshot*foreground: #0602d8",
     "*screenshot_dialog*dspScreenshot*fontList: -*-clean-*-*-*-*-12-*-*-*-*-*-*-*",
+
+    "*splash*splash_text.fontList: -*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*",
 
     "*about_dialog*fontList: -*-clean-*-*-*-*-13-*-*-*-*-*-*-*",
     "*update_dialog*fontList: -*-clean-*-*-*-*-13-*-*-*-*-*-*-*",
@@ -239,7 +243,7 @@ int loadSystemsListOnline(void) {
     busy_end(scrolled_systems_list);
     if (rc == RESPONSE_REGISTRATION_REQUIRED) {
         if (cloudAPI_lastError()[0] != '\0') printf("Error: %s\n", cloudAPI_lastError());
-        printf("You must register this system first by starting sginet CLI\n");
+        printf("This system is not registered on SGINet\n");
         if (lstNew) free(lstNew);
         return rc;
     }
@@ -299,6 +303,7 @@ void error_usage(void) {
     fprintf(stderr, "  -r  print version\n");
     fprintf(stderr, "  -u  check for new version and upgrade xsginet\n");
     fprintf(stderr, "  -d  debug mode\n");
+    fprintf(stderr, "  --nosplash  do not show the splash screen on startup\n");
     if (debug) {
         fprintf(stderr, "  --ca-cert-bundle PATH  add CA certificates from a PEM bundle\n");
         fprintf(stderr, "  --sginet-bin PATH      xsginet binary for updater\n");
@@ -328,6 +333,8 @@ int argParser(int argc, char* argv[]) {
         } else if (strcmp(a, "-r") == 0) {
             printf("%s\n", THIS_CLIENT_VERSION); /* IMPORTANT: print version only! output used in 'upload-release' tool */
             exit(EXIT_SUCCESS);
+        } else if (strcmp(a, "--nosplash") == 0) {
+            show_splash = 0;
         } else if (strcmp(a, "--ca-cert-bundle") == 0) {
             if (i + 1 >= argc) error_usage();
             i += 1;
@@ -344,7 +351,6 @@ int argParser(int argc, char* argv[]) {
     return n;
 }
 static void systemlist_refresh_function(XtPointer client_data, XtIntervalId *id) {
-    XtAppContext app = (XtAppContext)client_data;
     refresh_timeout_id = 0; /* fired, no longer valid */
     if (loadSystemsListOnline() != RESPONSE_OK) printf("Error: Could not refresh systems list\n");
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, client_data);
@@ -362,10 +368,53 @@ static void handle_signal(int s) {
     if (debug) printf("\n\n[xsginet] SIGNAL %i received!\n\n", s);
     onQuit();
 }
-int main(int argc, char *argv[]) {
-    XtAppContext app;
+/* Build and show the main window, the splash stays up while the systems list loads */
+static void start_main_window(void) {
     Widget main_win, scrolled_win, main_win_menubar;
     Arg args[1];
+    int rc;
+
+    if (show_splash) splash_show(toplevel);
+
+    main_win = XmCreateMainWindow(toplevel, "main_win", NULL, 0);
+    XtManageChild(main_win);
+
+    main_win_menubar = attachMainMenuBar(main_win);
+
+    /* static vertical scrollbar to prevent unwanted gap on resize */
+    XtSetArg(args[0], XmNscrollBarDisplayPolicy, XmSTATIC);
+    scrolled_systems_list = XmCreateScrolledList(main_win, "scrolled_systems_list", args, 1);
+
+    /* "Online: $n" between menubar and system list */
+    lbl_online = XtVaCreateManagedWidget(
+        "lbl_online", xmLabelWidgetClass, main_win,
+        XmNalignment, XmALIGNMENT_BEGINNING,
+        XmNmarginWidth, 6,
+        XmNmarginHeight, 4,
+        NULL);
+
+    rc = loadSystemsListOnline();
+    splash_hide();
+    /* do not start if unable to connect */
+    if (rc != RESPONSE_OK) {
+        show_fatal_error(toplevel, cloudAPI_lastError()[0] != '\0' ? cloudAPI_lastError() : MSG_NO_CONNECTION);
+        return;
+    }
+
+    XtAddCallback(scrolled_systems_list, XmNdefaultActionCallback, sysinfo_callback, NULL);
+    XtManageChild(scrolled_systems_list);
+
+    /* Use the parent scrolled window as the work area */
+    scrolled_win = XtParent(scrolled_systems_list);
+    XmMainWindowSetAreas(main_win, main_win_menubar, lbl_online, NULL, NULL, scrolled_win);
+
+    /* Schedule background refresh task */
+    refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);
+
+    XtRealizeWidget(toplevel);
+    alignOnlineLabel(main_win_menubar);
+}
+int main(int argc, char *argv[]) {
     int rc;
 #if XtSpecificationRelease >= 6
     int xargc;      /* X11R6 (IRIX 6.5) */
@@ -411,39 +460,19 @@ int main(int argc, char *argv[]) {
         error_usage();
     }
 
-    main_win = XmCreateMainWindow(toplevel, "main_win", NULL, 0);
-    XtManageChild(main_win);
+    /* Say hello to the cloud, an unregistered machine must register first */
+    if (show_splash) splash_show(toplevel);
+    rc = cloudAPI_request(REQTYPE_HELLO);
+    if (rc == RESPONSE_REGISTRATION_REQUIRED) {
+        if (debug) printf("[xsginet] Please register first\n");
+        register_show(toplevel, start_main_window);
+    } else if (rc != RESPONSE_OK) {
+        splash_hide();
+        show_fatal_error(toplevel, cloudAPI_lastError()[0] != '\0' ? cloudAPI_lastError() : "Could not connect to SGINet backend");
+    } else {
+        start_main_window();
+    }
 
-    main_win_menubar = attachMainMenuBar(main_win);
-
-    /* static vertical scrollbar to prevent unwanted gap on resize */
-    XtSetArg(args[0], XmNscrollBarDisplayPolicy, XmSTATIC);
-    scrolled_systems_list = XmCreateScrolledList(main_win, "scrolled_systems_list", args, 1);
-
-    /* "Online: $n" between menubar and system list */
-    lbl_online = XtVaCreateManagedWidget(
-        "lbl_online", xmLabelWidgetClass, main_win,
-        XmNalignment, XmALIGNMENT_BEGINNING,
-        XmNmarginWidth, 6,
-        XmNmarginHeight, 4,
-        NULL);
-
-    rc = loadSystemsListOnline();
-    /* do not start if machine has not been registered yet or unable to connect */
-    if (rc != RESPONSE_OK) exit(0);
-
-    XtAddCallback(scrolled_systems_list, XmNdefaultActionCallback, sysinfo_callback, NULL);
-    XtManageChild(scrolled_systems_list);
-
-    /* Use the parent scrolled window as the work area */
-    scrolled_win = XtParent(scrolled_systems_list);
-    XmMainWindowSetAreas(main_win, main_win_menubar, lbl_online, NULL, NULL, scrolled_win);
-
-    /* Schedule background refresh task */
-    refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);
-
-    XtRealizeWidget(toplevel);
-    alignOnlineLabel(main_win_menubar);
     XtAppMainLoop(app);
 
     return 0;

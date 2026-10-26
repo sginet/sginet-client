@@ -11,7 +11,7 @@
 
 int validateForm(FIELD *field[], char *usr, char *machine) {
     snprintf(usr, 32, "%s", trim_whitespaces(field_buffer(field[0], 0)));
-    snprintf(machine, 64, "%s", trim_whitespaces(field_buffer(field[1], 0)));
+    snprintf(machine, REG_NAME_SIZE, "%s", trim_whitespaces(field_buffer(field[1], 0)));
     if (strlen(usr) < 3) return 0;
     if (strlen(machine) < 2) return 0;
     return 1;  /* OK */

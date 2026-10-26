@@ -379,9 +379,9 @@ int main(int argc, char* argv[]) {
         }
         return EXIT_FAILURE;
     } else if (rc == RESPONSE_REGISTRATION_REQUIRED) {
-        char modelname[63];
+        char modelname[REG_NAME_SIZE];
         char ipmodel[5];
-        char machine[63];
+        char machine[REG_NAME_SIZE];
         char usr[32];
         int CPUCount;
         char *infoMsg;

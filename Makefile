@@ -73,7 +73,8 @@ OBJ = sginet.o cloudAPI.o hwinfo_sgi.o nc_register.o nc_mainmenu.o nc_tools.o st
 
 # xsginet: the Motif client and the shared code it uses
 X11_SRC = x11-client/main.c x11-client/w_about.c x11-client/w_updater.c x11-client/w_softwaresearch.c \
-	x11-client/w_systeminfo.c x11-client/w_shoutbox.c x11-client/w_screenshot.c x11-client/w_systemadvisor.c
+	x11-client/w_systeminfo.c x11-client/w_shoutbox.c x11-client/w_screenshot.c x11-client/w_systemadvisor.c \
+	x11-client/w_startup.c x11-client/w_register.c
 X11_SHARED = cloudAPI.c hwinfo_sgi.c fileutils.c str_tools.c systemadvisor.c http_client.c ta_builtin.c
 X11LIBS = -lXm -lXt -lX11
 # IRIX 5.3 Motif 1.2 may also need -lPW
