@@ -191,15 +191,15 @@ REMOVEOP_GLOBE='removeop("/etc/killall -TERM xsginet-globe 2>/dev/null; true")'
 FTRMAKE='exitop("if test -r $rbase/usr/lib/filetype/Makefile; then chroot $rbase /sbin/sh -c \"cd /usr/lib/filetype; make -u > /dev/null 2>&1\"; fi; true")'
 
 (
-    echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip"
+    echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip norqs"
     if [ -n "$XSGINET" ]; then
-        echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip $REMOVEOP_X11"
+        echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip norqs $REMOVEOP_X11"
         echo "f 0644 root sys $FTRDIR/xsginet.ftr $FTRDIR/xsginet.ftr $SUBSYS_X11 $FTRMAKE"
         echo "f 0644 root sys $ICONLIBDIR/xSGINet.fti $ICONLIBDIR/xSGINet.fti $SUBSYS_X11"
         echo "l 0755 root sys $ICONCATDIR/xsginet $ICONCATDIR/xsginet $SUBSYS_X11 symval(/usr/bin/xsginet)"
     fi
     if [ -n "$XSGINET_GLOBE" ]; then
-        echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip $REMOVEOP_GLOBE"
+        echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip norqs $REMOVEOP_GLOBE"
         echo "f 0644 root sys $FTRDIR/xsginet-globe.ftr $FTRDIR/xsginet-globe.ftr $SUBSYS_GLOBE $FTRMAKE"
         echo "f 0644 root sys $ICONLIBDIR/xSGINet-globe.fti $ICONLIBDIR/xSGINet-globe.fti $SUBSYS_GLOBE"
         echo "l 0755 root sys $ICONCATDIR/xsginet-globe $ICONCATDIR/xsginet-globe $SUBSYS_GLOBE symval(/usr/bin/xsginet-globe)"
