@@ -187,12 +187,12 @@ REMOVEOP_GLOBE='removeop("/etc/killall -TERM xsginet-globe 2>/dev/null; true")'
 
 # sort on the 5th field (destination path); old style key syntax for IRIX 5 sort
 (
-    echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip"
+    echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip norqs"
     if [ -n "$XSGINET" ]; then
-        echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip $REMOVEOP_X11"
+        echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip norqs $REMOVEOP_X11"
     fi
     if [ -n "$XSGINET_GLOBE" ]; then
-        echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip $REMOVEOP_GLOBE"
+        echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip norqs $REMOVEOP_GLOBE"
     fi
     echo "f 0755 root sys etc/init.d/sginet-daemon etc/init.d/sginet-daemon $SUBSYS $REMOVEOP"
     echo "f 0644 root sys etc/config/sginet-daemon etc/config/sginet-daemon $SUBSYS config(noupdate)"

@@ -17,10 +17,10 @@
 #define TEXTURE_1024 1
 
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261021-0717-XG5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261026-1000-XG5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "XG5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261021-0717-XG6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261026-1000-XG6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "XG6" /* must be 3 chars */
 #endif
 #define THIS_CLIENT_BIN "/usr/bin/xsginet-globe" /* for online updater, --sginet-bin overrides */
