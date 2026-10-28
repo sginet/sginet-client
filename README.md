@@ -34,7 +34,7 @@ Integrated online updater: sginet, xsginet and xsginet-globe come with an integr
 
 The tardist package will install the `sginet` executable in `/usr/bin` which should already be in the search path of a default IRIX installation.
 
-The X11/Motif client `xsginet` is installed in `/usr/bin` too. Register your machine with `sginet` before you launch `xsginet`.
+The X11/Motif client `xsginet` is installed in `/usr/bin` too.
 
 To launch the `sginet` client with its ncurses UI in a terminal:
 
@@ -72,7 +72,7 @@ SGINet is licensed under the MIT License, see the [LICENSE](LICENSE) file for de
 
 Bundled third-party code keeps its own license:
 
-- BearSSL — MIT
-- json-c — MIT
-- ncurses — X11/MIT-style license
+- BearSSL: MIT
+- json-c: MIT
+- ncurses: X11/MIT-style license
 
