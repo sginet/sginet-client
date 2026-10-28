@@ -34,7 +34,7 @@ static unsigned short quantize(int v8) {
  * Pixel for #RRGGBB: an exact (quantized) color if the colormap has room,
  * otherwise the nearest color allocated so far, black if there is none.
  */
-static unsigned long alloc_pixel(Display *dpy, Colormap cmap, const char *spec) {
+static unsigned long alloc_pixel(Display *dpy, Colormap cmap, const char *spec, unsigned long *track, int *num_track) {
     XColor col, best;
     long dist, best_dist;
     int i;
@@ -47,15 +47,15 @@ static unsigned long alloc_pixel(Display *dpy, Colormap cmap, const char *spec) 
     }
     col.flags = DoRed | DoGreen | DoBlue;
     if (XAllocColor(dpy, cmap, &col)) {
-        splash_pixels[splash_num_pixels++] = col.pixel;
+        if (track != NULL) track[(*num_track)++] = col.pixel;
         return col.pixel;
     }
     best.pixel = BlackPixel(dpy, DefaultScreen(dpy));
     best_dist = -1;
-    for (i = 0; i < splash_num_pixels; ++i) {
+    for (i = 0; track != NULL && i < *num_track; ++i) {
         XColor c;
         long dr, dg, db;
-        c.pixel = splash_pixels[i];
+        c.pixel = track[i];
         XQueryColor(dpy, cmap, &c);
         dr = ((long)c.red - col.red) >> 8;
         dg = ((long)c.green - col.green) >> 8;
@@ -71,8 +71,11 @@ static unsigned long alloc_pixel(Display *dpy, Colormap cmap, const char *spec) 
 /*
  * Minimal XPM reader (no libXpm on IRIX 5.x): 1-2 chars per pixel,
  * colors "#RRGGBB" or "None" (drawn in bg). Returns None on bad data.
+ * Allocated colors are appended to track (room for XPM_MAX_COLORS) so the
+ * caller can free them later, NULL keeps them for the lifetime of the app.
  */
-static Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height) {
+Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height,
+                       unsigned long *track, int *num_track) {
     Display *dpy = XtDisplay(w);
     Screen *screen = XtScreen(w);
     Colormap cmap;
@@ -99,7 +102,7 @@ static Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, 
         if (strcmp(spec, "None") == 0 || strcmp(spec, "none") == 0) {
             pixels[i] = bg;
         } else {
-            pixels[i] = alloc_pixel(dpy, cmap, spec);
+            pixels[i] = alloc_pixel(dpy, cmap, spec, track, num_track);
         }
     }
 
@@ -164,7 +167,7 @@ void splash_show(Widget parent) {
         NULL);
 
     splash_num_pixels = 0;
-    splash_pixmap = pixmap_from_xpm(form, sgicube_xpm, bg, &logo_w, &logo_h);
+    splash_pixmap = pixmap_from_xpm(form, sgicube_xpm, bg, &logo_w, &logo_h, splash_pixels, &splash_num_pixels);
 
     logo = XtVaCreateManagedWidget("logo", xmLabelWidgetClass, form,
         XmNlabelType, splash_pixmap != None ? XmPIXMAP : XmSTRING,

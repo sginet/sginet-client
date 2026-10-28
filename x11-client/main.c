@@ -4,6 +4,8 @@
 #include <X11/cursorfont.h>
 #include <sys/wait.h>
 
+#include "res/camera.xpm"
+
 #define REFRESH_INTERVAL 300000 /* refresh systems list every 5 minutes */
 #define THIS_CLIENT_BIN "/usr/bin/xsginet" /* for online updater, --sginet-bin overrides */
 #define GLOBE_BINARY "/usr/bin/xsginet-globe"
@@ -32,7 +34,7 @@ String fallback_resources[] = {
     /* fully qualified to override the IRIX scheme XmList defaults; monospace keeps the columns aligned */
     "SGINet*scrolled_systems_listSW.scrolled_systems_list.fontList: -misc-fixed-bold-r-normal--13-120-75-75-c-70-iso8859-1",
     "SGINet*scrolled_systems_listSW.scrolled_systems_list.foreground: #0602d8",
-    "SGINet*main_win.lbl_online.fontList: -*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*",
+    "SGINet*main_win*lbl_online.fontList: -*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*",
 
     "HINV*hinvWin.scrolledWin.textWidget.fontList: -misc-fixed-medium-r-normal--14-*-*-*-c-*-iso8859-1",
     "HINV*hinvWin.scrolledWin.textWidget.foreground: #0602d8",
@@ -213,7 +215,7 @@ static Dimension labelTextOffset(Widget w) {
 /* move the "Online: $n" text to align with "Actions" menu text */
 static void alignOnlineLabel(Widget menubar) {
     Widget cascade;
-    Position cascade_x = 0, menubar_x = 0, label_x = 0;
+    Position cascade_x = 0, menubar_x = 0, label_x = 0, bar_x = 0;
     Dimension margin_l = 0;
     int target, current;
 
@@ -223,10 +225,11 @@ static void alignOnlineLabel(Widget menubar) {
 
     XtVaGetValues(cascade, XmNx, &cascade_x, NULL);
     XtVaGetValues(menubar, XmNx, &menubar_x, NULL);
+    XtVaGetValues(XtParent(lbl_online), XmNx, &bar_x, NULL);
     XtVaGetValues(lbl_online, XmNx, &label_x, XmNmarginLeft, &margin_l, NULL);
 
     target = menubar_x + cascade_x + labelTextOffset(cascade);
-    current = label_x + labelTextOffset(lbl_online) - margin_l;
+    current = bar_x + label_x + labelTextOffset(lbl_online) - margin_l;
     if (target > current)
         XtVaSetValues(lbl_online, XmNmarginLeft, (Dimension)(target - current), NULL);
 }
@@ -370,9 +373,39 @@ static void handle_signal(int s) {
     if (debug) printf("\n\n[xsginet] SIGNAL %i received!\n\n", s);
     onQuit();
 }
+/* Camera button on the right of the "Online: $n" bar, opens the screenshot window */
+static void attachScreenshotButton(Widget bar, Widget main_win) {
+    Widget btn;
+    Pixmap pixmap;
+    Pixel bg;
+    Dimension w, h;
+    XmString str;
+
+    btn = XtVaCreateManagedWidget(
+        "btnScreenshot", xmPushButtonWidgetClass, bar,
+        XmNtopAttachment, XmATTACH_FORM,
+        XmNbottomAttachment, XmATTACH_FORM,
+        XmNrightAttachment, XmATTACH_FORM,
+        XmNrightOffset, 4,
+        XmNhighlightThickness, 0,
+        XmNmarginWidth, 2,
+        XmNmarginHeight, 1,
+        NULL);
+    XtAddCallback(btn, XmNactivateCallback, screenshot_menu_item_callback, (XtPointer)main_win);
+
+    XtVaGetValues(btn, XmNbackground, &bg, NULL);
+    pixmap = pixmap_from_xpm(btn, camera_xpm, bg, &w, &h, NULL, NULL);
+    if (pixmap != None) {
+        XtVaSetValues(btn, XmNlabelType, XmPIXMAP, XmNlabelPixmap, pixmap, NULL);
+    } else {
+        str = XmStringCreateLocalized("Screenshot");
+        XtVaSetValues(btn, XmNlabelString, str, NULL);
+        XmStringFree(str);
+    }
+}
 /* Build and show the main window, the splash stays up while the systems list loads */
 static void start_main_window(void) {
-    Widget main_win, scrolled_win, main_win_menubar;
+    Widget main_win, scrolled_win, main_win_menubar, online_bar;
     Arg args[1];
     int rc;
 
@@ -387,9 +420,14 @@ static void start_main_window(void) {
     XtSetArg(args[0], XmNscrollBarDisplayPolicy, XmSTATIC);
     scrolled_systems_list = XmCreateScrolledList(main_win, "scrolled_systems_list", args, 1);
 
-    /* "Online: $n" between menubar and system list */
+    /* "Online: $n" and the screenshot button between menubar and system list */
+    online_bar = XtVaCreateManagedWidget("online_bar", xmFormWidgetClass, main_win, NULL);
+    attachScreenshotButton(online_bar, main_win);
     lbl_online = XtVaCreateManagedWidget(
-        "lbl_online", xmLabelWidgetClass, main_win,
+        "lbl_online", xmLabelWidgetClass, online_bar,
+        XmNtopAttachment, XmATTACH_FORM,
+        XmNbottomAttachment, XmATTACH_FORM,
+        XmNleftAttachment, XmATTACH_FORM,
         XmNalignment, XmALIGNMENT_BEGINNING,
         XmNmarginWidth, 6,
         XmNmarginHeight, 4,
@@ -408,7 +446,7 @@ static void start_main_window(void) {
 
     /* Use the parent scrolled window as the work area */
     scrolled_win = XtParent(scrolled_systems_list);
-    XmMainWindowSetAreas(main_win, main_win_menubar, lbl_online, NULL, NULL, scrolled_win);
+    XmMainWindowSetAreas(main_win, main_win_menubar, online_bar, NULL, NULL, scrolled_win);
 
     /* Schedule background refresh task */
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);
