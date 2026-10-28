@@ -23,10 +23,10 @@
 
 #define MAX_SYSTEM_LIST_LINE_LENGTH 1024
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261026-1000-X_5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261028-1711-X_5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261026-1000-X_6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261028-1711-X_6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_6" /* must be 3 chars */
 #endif
 #define SCREENSHOT_FULLSCREEN 0

@@ -42,6 +42,8 @@ String fallback_resources[] = {
 
     "*screenshot_dialog*dspScreenshot*foreground: #0602d8",
     "*screenshot_dialog*dspScreenshot*fontList: -*-clean-*-*-*-*-12-*-*-*-*-*-*-*",
+    "*screenshot_dialog*dspScreenshot2*foreground: #0602d8",
+    "*screenshot_dialog*dspScreenshot2*fontList: -*-clean-*-*-*-*-12-*-*-*-*-*-*-*",
 
     "*splash*splash_text.fontList: -*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*",
 

@@ -5,9 +5,12 @@
 static void btnScreenshot_callback(Widget w, XtPointer client_data, XtPointer call_data);
 static void btnScreenshotRegion_callback(Widget w, XtPointer client_data, XtPointer call_data);
 static void screenshot_countdown(XtPointer client_data, XtIntervalId *id);
+static void select_region(XtPointer client_data, XtIntervalId *id);
 
 static Widget scr_dialog_shell = NULL; /* single instance, there is only one screenshot window */
 static Widget scr_parent = NULL;
+static Widget scr_label = NULL; 
+static Widget scr_label2 = NULL;
 
 static int countdown_active = 0;
 static int screenshotMode = SCREENSHOT_FULLSCREEN;
@@ -17,7 +20,21 @@ static int scr_region_y1 = 0;
 static int scr_region_y2 = 0;
 
 static void dlg_destroy_callback(Widget w, XtPointer client_data, XtPointer call_data) {
-    scr_dialog_shell = NULL; /* release global reference */
+    scr_dialog_shell = NULL; /* release global references */
+    scr_label = NULL;
+    scr_label2 = NULL;
+}
+static void set_label(Widget label, char *text) {
+    XmString str = XmStringCreateLocalized(text[0] ? text : " "); /* keep the line height when empty */
+    XtVaSetValues(label, XmNlabelString, str, NULL);
+    XmStringFree(str);
+}
+/* Split message in two labels to mimic a line break without having to measure font width */
+static void set_message(char *line1, char *line2) {
+    if (scr_label == NULL) return; /* closed by the user */
+    set_label(scr_label, line1);
+    set_label(scr_label2, line2);
+    XmUpdateDisplay(scr_label);
 }
 static Widget add_button(Widget row, char *name, XtCallbackProc cb, int delaySec) {
     Widget button = XmCreatePushButton(row, name, NULL, 0);
@@ -26,8 +43,7 @@ static Widget add_button(Widget row, char *name, XtCallbackProc cb, int delaySec
     return button;
 }
 void screenshot_menu_item_callback(Widget w, XtPointer client_data, XtPointer call_data) {
-    Widget row, scr_label;
-    XmString str;
+    Widget row;
     Arg args[10];
     int n;
 
@@ -44,10 +60,10 @@ void screenshot_menu_item_callback(Widget w, XtPointer client_data, XtPointer ca
 
         row = XmCreateRowColumn(scr_dialog_shell, "rowcol", NULL, 0);
         scr_label = XmCreateLabel(row, "dspScreenshot", NULL, 0);
-        str = XmStringCreateLocalized("Take a screenshot");
-        XtVaSetValues(scr_label, XmNlabelString, str, NULL);
-        XmStringFree(str);
+        scr_label2 = XmCreateLabel(row, "dspScreenshot2", NULL, 0);
+        set_message("Take and publish", "a screenshot");
         XtManageChild(scr_label);
+        XtManageChild(scr_label2);
 
         add_button(row, "Now", btnScreenshot_callback, 0);
         add_button(row, "In 5 seconds", btnScreenshot_callback, 5);
@@ -58,35 +74,25 @@ void screenshot_menu_item_callback(Widget w, XtPointer client_data, XtPointer ca
         return;
     }
     /* Already open: bring it to the front */
+    if (!countdown_active) set_message("Take and publish", "a screenshot");
     XtPopup(scr_dialog_shell, XtGrabNone);
     if (XtIsRealized(scr_dialog_shell)) XRaiseWindow(XtDisplay(scr_dialog_shell), XtWindow(scr_dialog_shell));
 }
+/* Show the screenshot window again with the upload result */
 static void show_result(int rc) {
-    Widget dialog, button;
-    XmString message, title;
-
-    dialog = XmCreateInformationDialog(scr_parent, "confirmation_dialog", NULL, 0);
-    if (rc == RESPONSE_OK) {
-        message = XmStringCreateLtoR("Screenshot is now available for \ndownload on sginet.flexion.io", XmFONTLIST_DEFAULT_TAG);
-    } else {
-        message = XmStringCreateLocalized("Failed to save screenshot");
+    if (scr_dialog_shell == NULL) {
+        /* closed by the user during the countdown: create it again */
+        screenshot_menu_item_callback(NULL, (XtPointer)scr_parent, NULL);
     }
-    title = XmStringCreateLocalized("Screenshot");
-    XtVaSetValues(dialog,
-                  XmNmessageString, message,
-                  XmNdialogTitle, title,
-                  NULL);
-    XmStringFree(message);
-    XmStringFree(title);
-
-    /* Remove the Help and Cancel buttons, keep only OK */
-    button = XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON);
-    if (button) XtUnmanageChild(button);
-    button = XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON);
-    if (button) XtUnmanageChild(button);
-    XtManageChild(dialog);
+    if (rc == RESPONSE_OK) {
+        set_message("Screenshot uploaded", "to sginet.flexion.io");
+    } else {
+        set_message("Failed to upload", "screenshot");
+    }
+    XtPopup(scr_dialog_shell, XtGrabNone);
+    if (XtIsRealized(scr_dialog_shell)) XRaiseWindow(XtDisplay(scr_dialog_shell), XtWindow(scr_dialog_shell));
 }
-/* "Screenshot (5)" while counting down, plain "Screenshot" for sec <= 0 */
+/* "Screenshot (n)" while counting down, plain "Screenshot" for sec <= 0 */
 static void set_countdown_title(int sec) {
     char title[32];
     if (scr_dialog_shell == NULL) return; /* closed by the user during the countdown */
@@ -99,15 +105,18 @@ static void set_countdown_title(int sec) {
 }
 /*
  * Timer chain, the event loop keeps running:
- * remaining > 0: show the seconds in the dialog title, tick again in 1s
+ * remaining > 0: show the seconds in the dialog title and message, tick again in 1s
  * remaining == 0: hide the dialog, give the server time to unmap it
- * remaining < 0: take the screenshot
+ * remaining < 0: take the screenshot, then show the dialog again with the result
  */
 static void screenshot_countdown(XtPointer client_data, XtIntervalId *id) {
     int remaining = (int)(long)client_data;
     int rc;
+    char msg[32];
     if (remaining > 0) {
         set_countdown_title(remaining);
+        sprintf(msg, "in %i seconds", remaining);
+        set_message("Taking screenshot", msg);
         XtAppAddTimeOut(XtWidgetToApplicationContext(scr_parent), 1000,
                         screenshot_countdown, (XtPointer)(long)(remaining - 1));
         return;
@@ -143,6 +152,15 @@ static void rect_from(int x0, int y0, int x1, int y1, int *x, int *y, int *w, in
     *h = abs(y1 - y0);
 }
 static void btnScreenshotRegion_callback(Widget w, XtPointer client_data, XtPointer call_data) {
+    if (countdown_active) return;
+    countdown_active = 1; /* ignore further clicks until done */
+    screenshotMode = SCREENSHOT_REGION;
+    XtPopdown(scr_dialog_shell); /* hidden until the screenshot is uploaded */
+    /* the selection window has no background and the selection blocks the event loop:
+       let the windows below the dialog repaint first */
+    XtAppAddTimeOut(XtWidgetToApplicationContext(scr_parent), 500, select_region, NULL);
+}
+static void select_region(XtPointer client_data, XtIntervalId *id) {
     Display *dpy;
     int screen, width, height;
     Window root, win;
@@ -153,11 +171,7 @@ static void btnScreenshotRegion_callback(Widget w, XtPointer client_data, XtPoin
     int rx, ry, rw, rh;
     int selected;
 
-    if (countdown_active) return;
-    screenshotMode = SCREENSHOT_REGION;
-    XtPopdown(scr_dialog_shell);
-
-    dpy = XtDisplay(scr_dialog_shell);
+    dpy = XtDisplay(scr_parent);
     screen = DefaultScreen(dpy);
     root = RootWindow(dpy, screen);
     width  = DisplayWidth(dpy, screen);
@@ -227,5 +241,10 @@ static void btnScreenshotRegion_callback(Widget w, XtPointer client_data, XtPoin
     XFreeGC(dpy, gc);
     XFlush(dpy);
 
-    if (selected) start_countdown(0);
+    if (selected) {
+        start_countdown(0);
+    } else {
+        countdown_active = 0; /* selection aborted */
+        if (scr_dialog_shell) XtPopup(scr_dialog_shell, XtGrabNone);
+    }
 }
