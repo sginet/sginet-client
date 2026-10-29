@@ -10,8 +10,12 @@ core
 tests/
 README.local
 
+# third party downloads
+third_party/ncurses-6.5.tar.gz
+
 # Admin tools
-upload-release-cli
+upload-release
+/release-uploader/
 
 # all object files
 *.o
