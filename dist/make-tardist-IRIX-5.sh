@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# Version 20261030-1205
 # Builds an IRIX 5.x inst tardist package "sginet_client" from the
 # natively built IRIX 5 sginet binary (see BUILDING.md, "smake irix5").
 #
@@ -7,11 +8,16 @@
 #   /usr/bin/sginet                 the sginet binary
 #   /usr/bin/xsginet                the X11/Motif client (subsystem x11, if built)
 #   /usr/bin/xsginet-globe          the OpenGL globe viewer (subsystem globe, if built)
+#   /usr/lib/filetype/install/xsginet.ftr, xsginet-globe.ftr
+#   /usr/lib/filetype/install/iconlib/xSGINet.fti, xSGINet-globe.fti
+#                                   desktop file type rules and icons (from icons/)
 #   /etc/init.d/sginet-daemon       init script (from daemon/sginet-daemon)
 #   /etc/config/sginet-daemon       chkconfig flag, set to "on"
 #   /etc/rc2.d/S58sginet            autostart link
 #   /usr/share/doc/sginet_client/LICENSES
 #                                   SGINet and third-party licenses (from dist/LICENSES)
+#
+# xsginet and xsginet-globe are added to the "SGINet" page of iconbook
 #
 # dist/inst.README and dist/inst.README.html are added to the top level
 # of the tardist (next to the product files) as the intro message for
@@ -60,6 +66,9 @@ SGINET=${SGINET:-$ROOT/sginet}
 XSGINET=${XSGINET:-$ROOT/xsginet}
 XSGINET_GLOBE=${XSGINET_GLOBE:-$ROOT/xsginet-globe}
 DAEMONSCRIPT=$ROOT/daemon/sginet-daemon
+ICONS=$ROOT/icons
+FTRDIR=usr/lib/filetype/install
+ICONLIBDIR=$FTRDIR/iconlib
 OUT=$ROOT/dist
 LICENSES=$OUT/LICENSES
 INSTREADME=$OUT/inst.README
@@ -95,7 +104,9 @@ if [ ! -f "$DAEMONSCRIPT" ]; then
     exit 1
 fi
 
-for f in "$LICENSES" "$INSTREADME" "$INSTREADMEHTML"; do
+for f in "$LICENSES" "$INSTREADME" "$INSTREADMEHTML" \
+         "$ICONS/xsginet.ftr" "$ICONS/xSGINet.fti" \
+         "$ICONS/xsginet-globe.ftr" "$ICONS/xSGINet-globe.fti"; do
     if [ ! -f "$f" ]; then
         echo "$f not found" 1>&2
         exit 1
@@ -147,7 +158,8 @@ fi
 echo "Work directory: $WORK"
 
 rm -rf "$WORK"
-mkdir -p "$STAGE/etc/init.d" "$STAGE/etc/config" "$STAGE/etc/rc2.d" "$STAGE/usr/bin" "$STAGE/$DOCDIR" "$DIST" || exit 1
+mkdir -p "$STAGE/etc/init.d" "$STAGE/etc/config" "$STAGE/etc/rc2.d" "$STAGE/usr/bin" "$STAGE/$DOCDIR" \
+    "$STAGE/$ICONLIBDIR" "$DIST" || exit 1
 
 # --- staging tree ---------------------------------------------------------
 
@@ -161,6 +173,18 @@ fi
 if [ -n "$XSGINET_GLOBE" ]; then
     cp "$XSGINET_GLOBE" "$STAGE/usr/bin/xsginet-globe" || exit 1
     chmod 755 "$STAGE/usr/bin/xsginet-globe"
+fi
+
+echo "Copying desktop file type rules and icons..."
+if [ -n "$XSGINET" ]; then
+    cp "$ICONS/xsginet.ftr" "$STAGE/$FTRDIR/xsginet.ftr" || exit 1
+    cp "$ICONS/xSGINet.fti" "$STAGE/$ICONLIBDIR/xSGINet.fti" || exit 1
+    chmod 644 "$STAGE/$FTRDIR/xsginet.ftr" "$STAGE/$ICONLIBDIR/xSGINet.fti"
+fi
+if [ -n "$XSGINET_GLOBE" ]; then
+    cp "$ICONS/xsginet-globe.ftr" "$STAGE/$FTRDIR/xsginet-globe.ftr" || exit 1
+    cp "$ICONS/xSGINet-globe.fti" "$STAGE/$ICONLIBDIR/xSGINet-globe.fti" || exit 1
+    chmod 644 "$STAGE/$FTRDIR/xsginet-globe.ftr" "$STAGE/$ICONLIBDIR/xSGINet-globe.fti"
 fi
 
 echo "Creating init script, chkconfig flag and autostart link..."
@@ -182,24 +206,44 @@ echo "Generating $IDB..."
 
 # stop the daemon before inst removes the files
 REMOVEOP='removeop("/etc/killall -TERM sginet 2>/dev/null; true")'
-REMOVEOP_X11='removeop("/etc/killall -TERM xsginet 2>/dev/null; true")'
-REMOVEOP_GLOBE='removeop("/etc/killall -TERM xsginet-globe 2>/dev/null; true")'
+# recompile the desktop file type database so the new rules and icons show up
+FTRMAKE='exitop("if test -r $rbase/usr/lib/filetype/Makefile; then chroot $rbase /sbin/sh -c \"cd /usr/lib/filetype; make -u > /dev/null 2>&1\"; fi; true")'
+# add/put away the launcher icons on the system icon book page (all users).
+IBVARS="E=\\\"chroot \$rbase /usr/sbin/iconbookedit\\\"; P=\$rbase/usr/lib/desktop/iconbook/syspages/SGINet; X=\\\"Category:File Name:/usr/bin/xsginet\\\"; G=\\\"\$X-globe\\\""
+IBTEST='if test -x $rbase/usr/sbin/iconbookedit; then'
+IBHASX='grep \"^icon $X *$\" $P > /dev/null 2>&1'
+IBHASG='grep \"^icon $G *$\" $P > /dev/null 2>&1'
+IBADDX='$E -add \"$X\" -syspage SGINet'
+IBADDG='$E -add \"$G\" -syspage SGINet'
+IBDELX='$E -remove \"$X\" -syspage SGINet'
+IBDELG='$E -remove \"$G\" -syspage SGINet'
+# iconbookedit keeps an empty page file - delete it with the last icon
+IBCLEAN='grep \"^icon \" $P > /dev/null 2>&1 || rm -f $P'
+ICONBOOKOP_X11="exitop(\"$IBTEST $IBVARS; if $IBHASX; then true; elif $IBHASG; then $IBDELG; $IBADDX; $IBADDG; else $IBADDX; fi; fi; true\")"
+REMOVEOP_X11="removeop(\"/etc/killall -TERM xsginet 2>/dev/null; $IBTEST $IBVARS; if $IBHASG; then $IBDELG; $IBDELX; $IBADDG; else $IBDELX; fi; $IBCLEAN; fi; true\")"
+ICONBOOKOP_GLOBE="exitop(\"$IBTEST $IBVARS; $IBHASG || $IBADDG; fi; true\")"
+REMOVEOP_GLOBE="removeop(\"/etc/killall -TERM xsginet-globe 2>/dev/null; $IBTEST $IBVARS; $IBDELG; $IBCLEAN; fi; true\")"
 
-# sort on the 5th field (destination path); old style key syntax for IRIX 5 sort
+# sort on the 5th field (destination path) in byte order like gendist.
+# old style key syntax for IRIX 5 sort
 (
     echo "f 0755 root sys usr/bin/sginet usr/bin/sginet $SUBSYS nostrip norqs"
     if [ -n "$XSGINET" ]; then
         echo "f 0755 root sys usr/bin/xsginet usr/bin/xsginet $SUBSYS_X11 nostrip norqs $REMOVEOP_X11"
+        echo "f 0644 root sys $FTRDIR/xsginet.ftr $FTRDIR/xsginet.ftr $SUBSYS_X11 $FTRMAKE"
+        echo "f 0644 root sys $ICONLIBDIR/xSGINet.fti $ICONLIBDIR/xSGINet.fti $SUBSYS_X11 $ICONBOOKOP_X11"
     fi
     if [ -n "$XSGINET_GLOBE" ]; then
         echo "f 0755 root sys usr/bin/xsginet-globe usr/bin/xsginet-globe $SUBSYS_GLOBE nostrip norqs $REMOVEOP_GLOBE"
+        echo "f 0644 root sys $FTRDIR/xsginet-globe.ftr $FTRDIR/xsginet-globe.ftr $SUBSYS_GLOBE $FTRMAKE"
+        echo "f 0644 root sys $ICONLIBDIR/xSGINet-globe.fti $ICONLIBDIR/xSGINet-globe.fti $SUBSYS_GLOBE $ICONBOOKOP_GLOBE"
     fi
     echo "f 0755 root sys etc/init.d/sginet-daemon etc/init.d/sginet-daemon $SUBSYS $REMOVEOP"
     echo "f 0644 root sys etc/config/sginet-daemon etc/config/sginet-daemon $SUBSYS config(noupdate)"
     echo "l 0755 root sys etc/rc2.d/S58sginet etc/rc2.d/S58sginet $SUBSYS symval(../init.d/sginet-daemon)"
     echo "d 0755 root sys $DOCDIR $DOCDIR $SUBSYS"
     echo "f 0644 root sys $DOCDIR/LICENSES $DOCDIR/LICENSES $SUBSYS"
-) | sort +4 -5 > "$IDB" || exit 1
+) | LC_ALL=C LANG=C sort +4 -5 > "$IDB" || exit 1
 
 echo "  `wc -l < "$IDB" | sed 's/ //g'` entries"
 
