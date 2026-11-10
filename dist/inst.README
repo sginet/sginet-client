@@ -45,6 +45,9 @@ The globe viewer can be opened from the xsginet menu
 
   xsginet-globe
 
+A volume control for the analog output can be shown below the
+systems list with File > Show volume control.
+
 Unregistered, the globe is read-only. Register first to submit
 your machine's location.
 

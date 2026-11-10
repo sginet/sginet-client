@@ -120,6 +120,7 @@ static void globe_menu_item_callback(Widget w, XtPointer client_data, XtPointer 
 
 Widget attachMainMenuBar(Widget main_win) {
     Widget menubar, file_menu, tools_menu, item;
+    XmString str;
 
     menubar = XmCreateMenuBar(main_win, "menubar", NULL, 0);
     XtManageChild(menubar);
@@ -134,11 +135,23 @@ Widget attachMainMenuBar(Widget main_win) {
     item = create_menu_item(file_menu, "Refresh online systems");
     XtAddCallback(item, XmNactivateCallback, refresh_menu_item_callback, NULL);
 
+    str = XmStringCreateLocalized("Show volume control");
+    item = XtVaCreateManagedWidget(
+        "Show volume control", xmToggleButtonWidgetClass, file_menu,
+        XmNlabelString, str,
+        XmNvisibleWhenOff, True,
+        XmNset, False,
+        NULL);
+    XmStringFree(str);
+    XtAddCallback(item, XmNvalueChangedCallback, volume_toggle_callback, NULL);
+
     item = create_menu_item(file_menu, "Check for updates");
     XtAddCallback(item, XmNactivateCallback, show_update_callback, (XtPointer)main_win);
 
     item = create_menu_item(file_menu, "About xSGINet");
     XtAddCallback(item, XmNactivateCallback, about_callback, (XtPointer)main_win);
+
+    XtVaCreateManagedWidget("sep_quit", xmSeparatorWidgetClass, file_menu, NULL);
 
     item = create_menu_item(file_menu, "Quit");
     XtAddCallback(item, XmNactivateCallback, quit_callback, NULL);
@@ -447,6 +460,9 @@ static void start_main_window(void) {
     /* Use the parent scrolled window as the work area */
     scrolled_win = XtParent(scrolled_systems_list);
     XmMainWindowSetAreas(main_win, main_win_menubar, online_bar, NULL, NULL, scrolled_win);
+
+    /* hidden until File > Show volume control */
+    volume_create(main_win);
 
     /* Schedule background refresh task */
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);

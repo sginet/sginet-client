@@ -15,6 +15,9 @@
 #include <Xm/Text.h>
 #include <Xm/TextF.h>
 #include <Xm/DialogS.h>
+#include <Xm/Scale.h>
+#include <Xm/ToggleB.h>
+#include <Xm/Separator.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,6 +62,10 @@ void splash_show(Widget parent);
 void splash_hide(void);
 void show_fatal_error(Widget parent, const char *msg);
 Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height, unsigned long *track, int *num_track);
+
+/* volume control bar for the analog output (w_volume.c) */
+Widget volume_create(Widget main_win);
+void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* registration form (w_register.c) */
 void register_show(Widget parent, void (*registered)(void));

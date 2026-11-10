@@ -74,11 +74,11 @@ OBJ = sginet.o cloudAPI.o hwinfo_sgi.o nc_register.o nc_mainmenu.o nc_tools.o st
 # xsginet: the Motif client and the shared code it uses
 X11_SRC = x11-client/main.c x11-client/w_about.c x11-client/w_updater.c x11-client/w_softwaresearch.c \
 	x11-client/w_systeminfo.c x11-client/w_shoutbox.c x11-client/w_screenshot.c x11-client/w_systemadvisor.c \
-	x11-client/w_startup.c x11-client/w_register.c
+	x11-client/w_startup.c x11-client/w_register.c x11-client/w_volume.c
 X11_SHARED = cloudAPI.c hwinfo_sgi.c fileutils.c str_tools.c systemadvisor.c http_client.c ta_builtin.c
-X11LIBS = -lXm -lXt -lX11
+X11LIBS = -lXm -lXt -lX11 -laudio
 # IRIX 5.3 Motif 1.2 may also need -lPW
-X11LIBS_IRIX5 = -lXm -lXt -lX11
+X11LIBS_IRIX5 = -lXm -lXt -lX11 -laudio
 X11_TARGET = xsginet
 # IRIX 6.5: rld must use the IRIX system Motif/X11/GL, not /usr/sgug/lib32
 # from LD_LIBRARY*_PATH in an SGUG-RSE sgugshell
@@ -204,7 +204,7 @@ sginet-linux: $(BEARSSL_LIB) $(JSONC_LIB) $(NCURSES_STAMP)
 
 xsginet-linux: FORCE
 	$(MAKE) PLATFORM=linux CC=gcc OPT="-O2 -g" WARN="-Wall -Wno-unused-variable -Wno-unused-but-set-variable" \
-		BR_PLATFORM= X11_TARGET=xsginet-linux X11_LDFLAGS= xsginet
+		BR_PLATFORM= X11_TARGET=xsginet-linux X11_LDFLAGS= X11LIBS="-lXm -lXt -lX11" xsginet
 
 # Mesa GLwDrawA.h declares the widget class without extern: -fcommon, and -u pulls
 # the Motif widget out of libGLw.a (the tentative definition in main.o would hide it)
