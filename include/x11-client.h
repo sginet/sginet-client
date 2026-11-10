@@ -64,7 +64,7 @@ void show_fatal_error(Widget parent, const char *msg);
 Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height, unsigned long *track, int *num_track);
 
 /* container below the systems list for the volume and CPU load bars (main.c) */
-void bottom_area_update(void);
+void bottom_area_show(Widget child, Boolean show);
 
 /* volume control bar for the analog output (w_volume.c) */
 Widget volume_create(Widget parent);

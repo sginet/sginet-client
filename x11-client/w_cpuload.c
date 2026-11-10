@@ -5,10 +5,10 @@
 
 #if defined(__sgi)
 
-#define CPULOAD_INTERVAL 1000 /* ms between samples */
+#define CPULOAD_INTERVAL 500 /* ms between samples */
 #define CPULOAD_MAX_CPUS 64
-#define CPULOAD_BAR_H 4       /* height of one CPU bar in pixels */
-#define CPULOAD_GAP 1         /* vertical gap between bars */
+#define CPULOAD_BAR_H 8       /* height of one CPU bar in pixels */
+#define CPULOAD_GAP 3         /* vertical gap between bars */
 #define CPULOAD_MARGIN 3      /* border around all bars */
 
 /* segment order from left to right, gr_osview colors */
@@ -123,7 +123,6 @@ void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_dat
     if (cpuload_bar == NULL) return;
     if (cbs->set) {
         Machine_scanCPU(machine); /* baseline, the first tick shows the load since now */
-        XtManageChild(cpuload_bar);
         if (tick_id == 0)
             tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_INTERVAL, cpuload_tick, NULL);
     } else {
@@ -131,9 +130,8 @@ void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_dat
             XtRemoveTimeOut(tick_id);
             tick_id = 0;
         }
-        XtUnmanageChild(cpuload_bar);
     }
-    bottom_area_update();
+    bottom_area_show(cpuload_bar, cbs->set ? True : False);
 }
 
 #else /* !__sgi: disabled if not sgi */

@@ -228,9 +228,6 @@ void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data
     if (volume_bar == NULL) return;
     if (cbs->set) {
         volume_sync();
-        XtManageChild(volume_bar);
-    } else {
-        XtUnmanageChild(volume_bar);
     }
-    bottom_area_update();
+    bottom_area_show(volume_bar, cbs->set ? True : False);
 }

@@ -65,18 +65,50 @@ String fallback_resources[] = {
 };
 
 /* Watch cursor on the shell of w while a (blocking) cloud API call runs */
-/* show the bottom area only while one of its bars is visible, so no empty strip is left */
-void bottom_area_update(void) {
+/* bottom area: height including border, 0 while hidden */
+static int bottom_area_height(int preferred) {
+    XtWidgetGeometry pref;
+    Dimension h = 0, bw = 0;
+    if (!XtIsManaged(bottom_area)) return 0;
+    if (preferred) {
+        XtQueryGeometry(bottom_area, NULL, &pref);
+        h = pref.height;
+        bw = pref.border_width;
+    } else {
+        XtVaGetValues(bottom_area, XmNheight, &h, XmNborderWidth, &bw, NULL);
+    }
+    return h + 2 * bw;
+}
+/*
+ * Show or hide one strip below the systems list. The bottom area is only
+ * managed while one of its strips is visible, and the shell grows/shrinks by
+ * the height difference, so the list keeps its size: the main window would
+ * otherwise only give the new strip space on the next manual resize.
+ */
+void bottom_area_show(Widget child, Boolean show) {
     WidgetList children;
     Cardinal num_children = 0, i;
-    int any = 0;
-    if (bottom_area == NULL) return;
+    Dimension shell_h = 0;
+    int any = 0, old_h, new_h;
+    if (bottom_area == NULL || child == NULL) return;
+
+    old_h = bottom_area_height(0);
+    if (show) XtManageChild(child);
+    else XtUnmanageChild(child);
+
     XtVaGetValues(bottom_area, XmNchildren, &children, XmNnumChildren, &num_children, NULL);
     for (i = 0; i < num_children; i++) {
         if (XtIsManaged(children[i])) any = 1;
     }
     if (any) XtManageChild(bottom_area);
     else XtUnmanageChild(bottom_area);
+    new_h = bottom_area_height(1);
+
+    if (new_h != old_h && XtIsRealized(toplevel)) {
+        XtVaGetValues(toplevel, XmNheight, &shell_h, NULL);
+        if ((int)shell_h + new_h - old_h > 0)
+            XtVaSetValues(toplevel, XmNheight, (Dimension)(shell_h + new_h - old_h), NULL);
+    }
 }
 static Widget shell_of(Widget w) {
     while (w != NULL && !XtIsShell(w)) w = XtParent(w);
