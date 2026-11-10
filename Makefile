@@ -76,9 +76,9 @@ X11_SRC = x11-client/main.c x11-client/w_about.c x11-client/w_updater.c x11-clie
 	x11-client/w_systeminfo.c x11-client/w_shoutbox.c x11-client/w_screenshot.c x11-client/w_systemadvisor.c \
 	x11-client/w_startup.c x11-client/w_register.c x11-client/w_volume.c
 X11_SHARED = cloudAPI.c hwinfo_sgi.c fileutils.c str_tools.c systemadvisor.c http_client.c ta_builtin.c
-X11LIBS = -lXm -lXt -lX11 -laudio
+X11LIBS = -lXm -lXt -lX11 -laudio -lm
 # IRIX 5.3 Motif 1.2 may also need -lPW
-X11LIBS_IRIX5 = -lXm -lXt -lX11 -laudio
+X11LIBS_IRIX5 = -lXm -lXt -lX11 -laudio -lm
 X11_TARGET = xsginet
 # IRIX 6.5: rld must use the IRIX system Motif/X11/GL, not /usr/sgug/lib32
 # from LD_LIBRARY*_PATH in an SGUG-RSE sgugshell

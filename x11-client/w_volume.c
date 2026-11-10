@@ -4,11 +4,13 @@
 
 #if defined(__sgi)
 #include <audio.h>
+#include <math.h>
 #endif
 
 static Widget volume_bar = NULL;
 static Widget scl_volume = NULL;
 static Widget tgl_mute = NULL;
+static Widget lbl_volume = NULL;
 
 /* ---- platform layer: volume in percent (0-100), 0 = ok ---- */
 #if defined(__sgi)
@@ -18,15 +20,22 @@ static int hw_mute = 0;       /* AL_SPEAKER_MUTE_CTL supported */
 static int soft_muted = 0;    /* fallback: gain set to 0, previous gain saved */
 static int soft_saved = 0;
 
+/* apanel maps its slider logarithmically onto the 0-255 gain */
+#define GAIN_LOG_STEP 0.0232
 static int gain_to_percent(long gain) {
-    if (gain < 0) gain = 0;
-    if (gain > 255) gain = 255;
-    return (int)((gain * 100 + 127) / 255);
+    double p;
+    if (gain <= 0) return 0;
+    if (gain >= 255) return 100;
+    p = 100.0 + log10((double)gain / 255.0) / GAIN_LOG_STEP;
+    if (p < 1.0) p = 1.0;
+    return (int)(p + 0.5);
 }
 static long percent_to_gain(int percent) {
-    if (percent < 0) percent = 0;
-    if (percent > 100) percent = 100;
-    return ((long)percent * 255 + 50) / 100;
+    long gain;
+    if (percent <= 0) return 0;
+    if (percent >= 100) return 255;
+    gain = (long)(255.0 * pow(10.0, (percent - 100) * GAIN_LOG_STEP) + 0.5);
+    return gain < 1 ? 1 : gain;
 }
 static void audio_init(void) {
 #ifdef AL_SPEAKER_MUTE_CTL
@@ -124,8 +133,18 @@ static int audio_set_mute(int muted, int percent) {
 #endif
 
 /* ---- widgets ---- */
+/* the value is shown in the label instead of above the scale (saves vertical space) */
+static void volume_label_update(int percent) {
+    char buf[32];
+    XmString str;
+    sprintf(buf, "Volume: %d%%", percent);
+    str = XmStringCreateLocalized(buf);
+    XtVaSetValues(lbl_volume, XmNlabelString, str, NULL);
+    XmStringFree(str);
+}
 static void volume_changed_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     XmScaleCallbackStruct *cbs = (XmScaleCallbackStruct *)call_data;
+    volume_label_update(cbs->value);
     audio_set_volume(cbs->value);
 }
 static void mute_changed_callback(Widget w, XtPointer client_data, XtPointer call_data) {
@@ -144,26 +163,30 @@ static void volume_sync(void) {
         return;
     }
     XmScaleSetValue(scl_volume, percent);
+    volume_label_update(percent);
     XmToggleButtonSetState(tgl_mute, muted ? True : False, False);
     XtSetSensitive(tgl_mute, True);
     XtSetSensitive(scl_volume, muted ? False : True);
 }
 Widget volume_create(Widget main_win) {
-    Widget lbl;
     XmString str;
 
     volume_bar = XtVaCreateWidget("volume_bar", xmFormWidgetClass, main_win, NULL);
 
-    str = XmStringCreateLocalized("Volume:");
-    lbl = XtVaCreateManagedWidget(
+    /* created with the widest text and fixed in size, so the scale does not move */
+    str = XmStringCreateLocalized("Volume: 100%");
+    lbl_volume = XtVaCreateManagedWidget(
         "lbl_volume", xmLabelWidgetClass, volume_bar,
         XmNlabelString, str,
+        XmNalignment, XmALIGNMENT_BEGINNING,
         XmNtopAttachment, XmATTACH_FORM,
         XmNbottomAttachment, XmATTACH_FORM,
         XmNleftAttachment, XmATTACH_FORM,
         XmNleftOffset, 4,
         NULL);
     XmStringFree(str);
+    XtVaSetValues(lbl_volume, XmNrecomputeSize, False, NULL);
+    volume_label_update(50);
 
     str = XmStringCreateLocalized("Mute");
     tgl_mute = XtVaCreateManagedWidget(
@@ -183,12 +206,12 @@ Widget volume_create(Widget main_win) {
         XmNminimum, 0,
         XmNmaximum, 100,
         XmNvalue, 50,
-        XmNshowValue, True,
+        XmNshowValue, False,
         XmNtopAttachment, XmATTACH_FORM,
         XmNbottomAttachment, XmATTACH_FORM,
         XmNbottomOffset, 2,
         XmNleftAttachment, XmATTACH_WIDGET,
-        XmNleftWidget, lbl,
+        XmNleftWidget, lbl_volume,
         XmNleftOffset, 4,
         XmNrightAttachment, XmATTACH_WIDGET,
         XmNrightWidget, tgl_mute,
