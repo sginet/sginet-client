@@ -10,6 +10,8 @@
 #define CPULOAD_BAR_H 8       /* height of one CPU bar in pixels */
 #define CPULOAD_GAP 3         /* vertical gap between bars */
 #define CPULOAD_MARGIN 3      /* border around all bars */
+#define CPULOAD_FRAME 50      /* ms between redraws while a bar falls off */
+#define CPULOAD_FALLOFF 2000  /* ms for a segment to fall from 100% to 0% (like gr_osview) */
 
 /* segment order from left to right, gr_osview colors */
 enum { SEG_USER, SEG_SYS, SEG_WAIT, SEG_IDLE, SEG_COUNT };
@@ -26,6 +28,9 @@ static int num_cpus = 0;
 static GC gc = NULL;
 static Pixel seg_pixel[SEG_COUNT];
 static XtIntervalId tick_id = 0;
+static int frame_ms = 0;  /* ms since the last sample */
+/* displayed percentages: rise at once to a new sample, decrease slowly */
+static double shown[CPULOAD_MAX_CPUS][SEG_IDLE];
 
 static void alloc_colors(Widget w) {
     Display *dpy = XtDisplay(w);
@@ -47,8 +52,7 @@ static void cpuload_draw(void) {
     Window win;
     Dimension width = 0;
     int bar_w, inner_w, inner_h, x_end, c, s, x, y, seg_w;
-    double pct[SEG_COUNT];
-    CPUData *cpu;
+    double *pct;
 
     if (cpuload_bar == NULL || !XtIsRealized(cpuload_bar) || machine == NULL) return;
     dpy = XtDisplay(cpuload_bar);
@@ -67,10 +71,7 @@ static void cpuload_draw(void) {
     x_end = CPULOAD_MARGIN + 1 + inner_w;
 
     for (c = 0; c < num_cpus; c++) {
-        cpu = &machine->cpuData[c];
-        pct[SEG_USER] = cpu->pct_normal;
-        pct[SEG_SYS] = cpu->pct_kernel + cpu->pct_irq;
-        pct[SEG_WAIT] = cpu->pct_wait;
+        pct = shown[c];
 
         y = CPULOAD_MARGIN + c * (CPULOAD_BAR_H + CPULOAD_GAP);
         XSetForeground(dpy, gc, BlackPixelOfScreen(XtScreen(cpuload_bar)));
@@ -98,11 +99,38 @@ static void cpuload_expose_callback(Widget w, XtPointer client_data, XtPointer c
     cpuload_draw();
 }
 
+/* move the displayed values towards the last sample: up at once, down by the falloff rate.
+   Returns 1 if any displayed value changed. */
+static int cpuload_step(int jump) {
+    double step = 100.0 * CPULOAD_FRAME / CPULOAD_FALLOFF;
+    double target[SEG_IDLE];
+    CPUData *cpu;
+    int c, s, changed = 0;
+    for (c = 0; c < num_cpus; c++) {
+        cpu = &machine->cpuData[c];
+        target[SEG_USER] = cpu->pct_normal;
+        target[SEG_SYS] = cpu->pct_kernel + cpu->pct_irq;
+        target[SEG_WAIT] = cpu->pct_wait;
+        for (s = 0; s < SEG_IDLE; s++) {
+            if (shown[c][s] != target[s]) changed = 1;
+            if (jump || target[s] >= shown[c][s] || shown[c][s] - step < target[s])
+                shown[c][s] = target[s];
+            else
+                shown[c][s] -= step;
+        }
+    }
+    return changed;
+}
+
 static void cpuload_tick(XtPointer client_data, XtIntervalId *id) {
     tick_id = 0;
-    Machine_scanCPU(machine);
-    cpuload_draw();
-    tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_INTERVAL, cpuload_tick, NULL);
+    frame_ms += CPULOAD_FRAME;
+    if (frame_ms >= CPULOAD_INTERVAL) {
+        frame_ms = 0;
+        Machine_scanCPU(machine);
+    }
+    if (cpuload_step(0)) cpuload_draw();
+    tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_FRAME, cpuload_tick, NULL);
 }
 
 Widget cpuload_create(Widget parent) {
@@ -130,9 +158,11 @@ void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_dat
     XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
     if (cpuload_bar == NULL) return;
     if (cbs->set) {
-        Machine_scanCPU(machine); /* baseline, the first tick shows the load since now */
+        Machine_scanCPU(machine); /* baseline, the first sample shows the load since now */
+        cpuload_step(1);          /* no falloff from values of a previous show */
+        frame_ms = 0;
         if (tick_id == 0)
-            tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_INTERVAL, cpuload_tick, NULL);
+            tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_FRAME, cpuload_tick, NULL);
     } else {
         if (tick_id != 0) {
             XtRemoveTimeOut(tick_id);
