@@ -119,55 +119,55 @@ static void globe_menu_item_callback(Widget w, XtPointer client_data, XtPointer 
 }
 
 Widget attachMainMenuBar(Widget main_win) {
-    Widget menubar, file_menu, about_menu, item;
+    Widget menubar, file_menu, tools_menu, item;
 
     menubar = XmCreateMenuBar(main_win, "menubar", NULL, 0);
     XtManageChild(menubar);
 
-    /* Actions menu */
+    /* File menu */
     file_menu = XmCreatePulldownMenu(menubar, "file_menu", NULL, 0);
     XtVaCreateManagedWidget(
-        "Actions", xmCascadeButtonWidgetClass, menubar,
+        "File", xmCascadeButtonWidgetClass, menubar,
         XmNsubMenuId, file_menu,
         NULL);
 
     item = create_menu_item(file_menu, "Refresh online systems");
     XtAddCallback(item, XmNactivateCallback, refresh_menu_item_callback, NULL);
 
-    item = create_menu_item(file_menu, "Search software");
+    item = create_menu_item(file_menu, "Check for updates");
+    XtAddCallback(item, XmNactivateCallback, show_update_callback, (XtPointer)main_win);
+
+    item = create_menu_item(file_menu, "About xSGINet");
+    XtAddCallback(item, XmNactivateCallback, about_callback, (XtPointer)main_win);
+
+    item = create_menu_item(file_menu, "Quit");
+    XtAddCallback(item, XmNactivateCallback, quit_callback, NULL);
+
+    /* Tools menu */
+    tools_menu = XmCreatePulldownMenu(menubar, "tools_menu", NULL, 0);
+    XtVaCreateManagedWidget(
+        "Tools", xmCascadeButtonWidgetClass, menubar,
+        XmNsubMenuId, tools_menu,
+        NULL);
+
+    item = create_menu_item(tools_menu, "Search software");
     XtAddCallback(item, XmNactivateCallback, show_swsearch_callback, (XtPointer)main_win);
 
-    item = create_menu_item(file_menu, "Shoutbox");
-    XtAddCallback(item, XmNactivateCallback, shoutbox_menu_item_callback, (XtPointer)main_win);
-
-    item = create_menu_item(file_menu, "Screenshot..");
-    XtAddCallback(item, XmNactivateCallback, screenshot_menu_item_callback, (XtPointer)main_win);
-
-    item = create_menu_item(file_menu, "System advisor");
+    item = create_menu_item(tools_menu, "System advisor");
     XtAddCallback(item, XmNactivateCallback, sysadvisor_menu_item_callback, (XtPointer)main_win);
 
-    item = create_menu_item(file_menu, "View globe..");
+    item = create_menu_item(tools_menu, "Shoutbox");
+    XtAddCallback(item, XmNactivateCallback, shoutbox_menu_item_callback, (XtPointer)main_win);
+
+    item = create_menu_item(tools_menu, "View globe..");
     if (access(GLOBE_BINARY, X_OK) == 0) {
         XtAddCallback(item, XmNactivateCallback, globe_menu_item_callback, NULL);
     } else {
         XtSetSensitive(item, False);
     }
 
-    item = create_menu_item(file_menu, "Quit");
-    XtAddCallback(item, XmNactivateCallback, quit_callback, NULL);
-
-    /* About menu */
-    about_menu = XmCreatePulldownMenu(menubar, "about_menu", NULL, 0);
-    XtVaCreateManagedWidget(
-        "About", xmCascadeButtonWidgetClass, menubar,
-        XmNsubMenuId, about_menu,
-        NULL);
-
-    item = create_menu_item(about_menu, "Check for updates");
-    XtAddCallback(item, XmNactivateCallback, show_update_callback, (XtPointer)main_win);
-
-    item = create_menu_item(about_menu, "About xSGINet");
-    XtAddCallback(item, XmNactivateCallback, about_callback, (XtPointer)main_win);
+    item = create_menu_item(tools_menu, "Screenshot..");
+    XtAddCallback(item, XmNactivateCallback, screenshot_menu_item_callback, (XtPointer)main_win);
 
     return menubar;
 }
@@ -212,7 +212,7 @@ static Dimension labelTextOffset(Widget w) {
     return highlight + shadow + margin_w + margin_l;
 }
 
-/* move the "Online: $n" text to align with "Actions" menu text */
+/* move the "Online: $n" text to align with "File" menu text */
 static void alignOnlineLabel(Widget menubar) {
     Widget cascade;
     Position cascade_x = 0, menubar_x = 0, label_x = 0, bar_x = 0;
@@ -220,7 +220,7 @@ static void alignOnlineLabel(Widget menubar) {
     int target, current;
 
     if (lbl_online == NULL) return;
-    cascade = XtNameToWidget(menubar, "Actions");
+    cascade = XtNameToWidget(menubar, "File");
     if (cascade == NULL) return;
 
     XtVaGetValues(cascade, XmNx, &cascade_x, NULL);

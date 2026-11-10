@@ -41,7 +41,7 @@ To start the X11 application:
   xsginet
 
 The globe viewer can be opened from the xsginet menu
-(Actions > View globe..) or started directly with:
+(Tools > View globe..) or started directly with:
 
   xsginet-globe
 
