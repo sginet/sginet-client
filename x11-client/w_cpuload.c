@@ -5,7 +5,7 @@
 
 #if defined(__sgi)
 
-#define CPULOAD_INTERVAL 500 /* ms between samples */
+#define CPULOAD_INTERVAL 250 /* ms between samples */
 #define CPULOAD_MAX_CPUS 64
 #define CPULOAD_BAR_H 8       /* height of one CPU bar in pixels */
 #define CPULOAD_GAP 3         /* vertical gap between bars */
@@ -46,7 +46,7 @@ static void cpuload_draw(void) {
     Display *dpy;
     Window win;
     Dimension width = 0;
-    int bar_w, c, s, x, y, seg_w;
+    int bar_w, inner_w, inner_h, x_end, c, s, x, y, seg_w;
     double pct[SEG_COUNT];
     CPUData *cpu;
 
@@ -60,7 +60,11 @@ static void cpuload_draw(void) {
 
     XtVaGetValues(cpuload_bar, XmNwidth, &width, NULL);
     bar_w = (int)width - 2 * CPULOAD_MARGIN;
-    if (bar_w < 1) return;
+    /* the 1px black border is inside the bar, the segments fill the inner area */
+    inner_w = bar_w - 2;
+    inner_h = CPULOAD_BAR_H - 2;
+    if (inner_w < 1 || inner_h < 1) return;
+    x_end = CPULOAD_MARGIN + 1 + inner_w;
 
     for (c = 0; c < num_cpus; c++) {
         cpu = &machine->cpuData[c];
@@ -68,20 +72,24 @@ static void cpuload_draw(void) {
         pct[SEG_SYS] = cpu->pct_kernel + cpu->pct_irq;
         pct[SEG_WAIT] = cpu->pct_wait;
 
-        x = CPULOAD_MARGIN;
         y = CPULOAD_MARGIN + c * (CPULOAD_BAR_H + CPULOAD_GAP);
+        XSetForeground(dpy, gc, BlackPixelOfScreen(XtScreen(cpuload_bar)));
+        XDrawRectangle(dpy, win, gc, CPULOAD_MARGIN, y, bar_w - 1, CPULOAD_BAR_H - 1);
+
+        x = CPULOAD_MARGIN + 1;
+        y++;
         for (s = 0; s < SEG_IDLE; s++) {
-            seg_w = (int)(bar_w * pct[s] / 100.0 + 0.5);
-            if (seg_w > CPULOAD_MARGIN + bar_w - x) seg_w = CPULOAD_MARGIN + bar_w - x;
+            seg_w = (int)(inner_w * pct[s] / 100.0 + 0.5);
+            if (seg_w > x_end - x) seg_w = x_end - x;
             if (seg_w <= 0) continue;
             XSetForeground(dpy, gc, seg_pixel[s]);
-            XFillRectangle(dpy, win, gc, x, y, seg_w, CPULOAD_BAR_H);
+            XFillRectangle(dpy, win, gc, x, y, seg_w, inner_h);
             x += seg_w;
         }
         /* idle takes the rest, so every pixel of the bar is painted (no flicker) */
-        if (x < CPULOAD_MARGIN + bar_w) {
+        if (x < x_end) {
             XSetForeground(dpy, gc, seg_pixel[SEG_IDLE]);
-            XFillRectangle(dpy, win, gc, x, y, CPULOAD_MARGIN + bar_w - x, CPULOAD_BAR_H);
+            XFillRectangle(dpy, win, gc, x, y, x_end - x, inner_h);
         }
     }
 }
