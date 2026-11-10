@@ -18,6 +18,9 @@ char G_CLIENTID[64];
 static Widget scrolled_systems_list = NULL;
 static Widget lbl_online = NULL;
 static Widget bottom_area = NULL; /* volume + CPU load bars below the systems list */
+/* section visibility from ~/.sginet-properties, read in main() */
+static int show_volume = 0;
+static int show_cpu_load = 0;
 static Cursor busy_cursor = None;
 static XtIntervalId refresh_timeout_id = 0;
 static XtAppContext app;
@@ -187,7 +190,7 @@ Widget attachMainMenuBar(Widget main_win) {
         "Show volume control", xmToggleButtonWidgetClass, file_menu,
         XmNlabelString, str,
         XmNvisibleWhenOff, True,
-        XmNset, False,
+        XmNset, show_volume ? True : False,
         NULL);
     XmStringFree(str);
     XtAddCallback(item, XmNvalueChangedCallback, volume_toggle_callback, NULL);
@@ -197,7 +200,7 @@ Widget attachMainMenuBar(Widget main_win) {
         "Show CPU load", xmToggleButtonWidgetClass, file_menu,
         XmNlabelString, str,
         XmNvisibleWhenOff, True,
-        XmNset, False,
+        XmNset, show_cpu_load ? True : False,
         NULL);
     XmStringFree(str);
     XtAddCallback(item, XmNvalueChangedCallback, cpuload_toggle_callback, NULL);
@@ -540,6 +543,10 @@ static void start_main_window(void) {
 
     XtRealizeWidget(toplevel);
     alignOnlineLabel(main_win_menubar);
+
+    /* restore the saved sections after realize, so the window grows to fit them */
+    if (show_volume) volume_show(True);
+    if (show_cpu_load) cpuload_show(True);
 }
 int main(int argc, char *argv[]) {
     int rc;
@@ -559,6 +566,11 @@ int main(int argc, char *argv[]) {
     getSYSID(G_CLIENTID);
     /* Parse command line options */
     argc = argParser(argc, argv);
+
+    show_volume = property_get_int(PROP_SHOW_VOLUME, 0);
+#if defined(__sgi)
+    show_cpu_load = property_get_int(PROP_SHOW_CPU_LOAD, 0);
+#endif
 
     if (debug) printf("G_CLIENTID: %s\n", G_CLIENTID);
 

@@ -222,12 +222,14 @@ Widget volume_create(Widget parent) {
 
     return volume_bar;
 }
+void volume_show(Boolean show) {
+    if (volume_bar == NULL) return;
+    if (show) volume_sync();
+    bottom_area_show(volume_bar, show);
+}
 /* File > Show volume control */
 void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
-    if (volume_bar == NULL) return;
-    if (cbs->set) {
-        volume_sync();
-    }
-    bottom_area_show(volume_bar, cbs->set ? True : False);
+    volume_show(cbs->set ? True : False);
+    property_set_int(PROP_SHOW_VOLUME, cbs->set ? 1 : 0);
 }

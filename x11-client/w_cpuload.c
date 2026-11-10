@@ -10,8 +10,8 @@
 #define CPULOAD_BAR_H 8       /* height of one CPU bar in pixels */
 #define CPULOAD_GAP 3         /* vertical gap between bars */
 #define CPULOAD_MARGIN 3      /* border around all bars */
-#define CPULOAD_FRAME 50      /* ms between redraws while a bar falls off */
-#define CPULOAD_FALLOFF 2000  /* ms for a segment to fall from 100% to 0% (like gr_osview) */
+#define CPULOAD_FRAME 150      /* ms between redraws while a bar falls off */
+#define CPULOAD_FALLOFF 1500  /* ms for a segment to fall from 100% to 0% (like gr_osview) */
 
 /* segment order from left to right, gr_osview colors */
 enum { SEG_USER, SEG_SYS, SEG_WAIT, SEG_IDLE, SEG_COUNT };
@@ -153,11 +153,9 @@ Widget cpuload_create(Widget parent) {
     return cpuload_bar;
 }
 
-/* File > Show CPU load */
-void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
-    XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
+void cpuload_show(Boolean show) {
     if (cpuload_bar == NULL) return;
-    if (cbs->set) {
+    if (show) {
         Machine_scanCPU(machine); /* baseline, the first sample shows the load since now */
         cpuload_step(1);          /* no falloff from values of a previous show */
         frame_ms = 0;
@@ -169,13 +167,21 @@ void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_dat
             tick_id = 0;
         }
     }
-    bottom_area_show(cpuload_bar, cbs->set ? True : False);
+    bottom_area_show(cpuload_bar, show);
+}
+/* File > Show CPU load */
+void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
+    XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
+    cpuload_show(cbs->set ? True : False);
+    property_set_int(PROP_SHOW_CPU_LOAD, cbs->set ? 1 : 0);
 }
 
 #else /* !__sgi: disabled if not sgi */
 
 Widget cpuload_create(Widget parent) {
     return NULL;
+}
+void cpuload_show(Boolean show) {
 }
 void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
 }

@@ -66,12 +66,20 @@ Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimensi
 /* container below the systems list for the volume and CPU load bars (main.c) */
 void bottom_area_show(Widget child, Boolean show);
 
+/* user settings in ~/.sginet-properties (properties.c) */
+#define PROP_SHOW_VOLUME "xsginet_show_volume_control"
+#define PROP_SHOW_CPU_LOAD "xsginet_show_cpu_load"
+int property_get_int(const char *key, int default_value);
+int property_set_int(const char *key, int value);
+
 /* volume control bar for the analog output (w_volume.c) */
 Widget volume_create(Widget parent);
+void volume_show(Boolean show);
 void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* gr_osview style CPU load bars, IRIX only (w_cpuload.c) */
 Widget cpuload_create(Widget parent);
+void cpuload_show(Boolean show);
 void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* registration form (w_register.c) */
