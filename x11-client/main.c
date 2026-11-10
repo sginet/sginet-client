@@ -64,56 +64,53 @@ String fallback_resources[] = {
     NULL
 };
 
-/* Watch cursor on the shell of w while a (blocking) cloud API call runs */
-/* bottom area: height including border, 0 while hidden */
-static int bottom_area_height(int preferred) {
-    XtWidgetGeometry pref;
+/* current height of a managed widget including its border, 0 while hidden */
+static int managed_height(Widget w) {
     Dimension h = 0, bw = 0;
-    if (!XtIsManaged(bottom_area)) return 0;
-    if (preferred) {
-        XtQueryGeometry(bottom_area, NULL, &pref);
-        h = pref.height;
-        bw = pref.border_width;
-    } else {
-        XtVaGetValues(bottom_area, XmNheight, &h, XmNborderWidth, &bw, NULL);
-    }
+    if (!XtIsManaged(w)) return 0;
+    XtVaGetValues(w, XmNheight, &h, XmNborderWidth, &bw, NULL);
     return h + 2 * bw;
 }
 /*
  * Show or hide one strip below the systems list. The bottom area is only
- * managed while one of its strips is visible, and the shell grows/shrinks by
- * the height difference, so the list keeps its size: the main window would
- * otherwise only give the new strip space on the next manual resize.
+ * managed while one of its strips is visible. The main window only gives a
+ * changed message window its space on a resize, so the shell is resized by
+ * the height difference (the list keeps its size), with a 1 pixel nudge to
+ * force the re-layout even if the height did not change.
  */
 void bottom_area_show(Widget child, Boolean show) {
     WidgetList children;
     Cardinal num_children = 0, i;
+    XtWidgetGeometry pref;
     Dimension shell_h = 0;
-    int any = 0, old_h, new_h;
+    int any = 0, old_h, new_h, target;
     if (bottom_area == NULL || child == NULL) return;
 
-    old_h = bottom_area_height(0);
-    /* always re-manage the area: only then does the main window re-layout with
-       its new preferred height (a child added to an already managed area is
-       otherwise squeezed until the next manual resize) */
-    XtUnmanageChild(bottom_area);
+    old_h = managed_height(bottom_area);
     if (show) XtManageChild(child);
     else XtUnmanageChild(child);
 
+    /* new height: sum of the visible strips' preferred heights
+       (the row column has no margins or spacing, and may not have re-laid out yet) */
+    new_h = 0;
     XtVaGetValues(bottom_area, XmNchildren, &children, XmNnumChildren, &num_children, NULL);
     for (i = 0; i < num_children; i++) {
-        if (XtIsManaged(children[i])) any = 1;
+        if (!XtIsManaged(children[i])) continue;
+        any = 1;
+        XtQueryGeometry(children[i], NULL, &pref);
+        new_h += pref.height + 2 * pref.border_width;
     }
     if (any) XtManageChild(bottom_area);
     else XtUnmanageChild(bottom_area);
-    new_h = bottom_area_height(1);
 
-    if (new_h != old_h && XtIsRealized(toplevel)) {
-        XtVaGetValues(toplevel, XmNheight, &shell_h, NULL);
-        if ((int)shell_h + new_h - old_h > 0)
-            XtVaSetValues(toplevel, XmNheight, (Dimension)(shell_h + new_h - old_h), NULL);
-    }
+    if (!XtIsRealized(toplevel)) return;
+    XtVaGetValues(toplevel, XmNheight, &shell_h, NULL);
+    target = (int)shell_h + new_h - old_h;
+    if (target < 1) target = 1;
+    XtVaSetValues(toplevel, XmNheight, (Dimension)(target + 1), NULL);
+    XtVaSetValues(toplevel, XmNheight, (Dimension)target, NULL);
 }
+/* Watch cursor on the shell of w while a (blocking) cloud API call runs */
 static Widget shell_of(Widget w) {
     while (w != NULL && !XtIsShell(w)) w = XtParent(w);
     return w;
