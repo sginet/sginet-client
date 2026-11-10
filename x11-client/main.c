@@ -93,6 +93,10 @@ void bottom_area_show(Widget child, Boolean show) {
     if (bottom_area == NULL || child == NULL) return;
 
     old_h = bottom_area_height(0);
+    /* always re-manage the area: only then does the main window re-layout with
+       its new preferred height (a child added to an already managed area is
+       otherwise squeezed until the next manual resize) */
+    XtUnmanageChild(bottom_area);
     if (show) XtManageChild(child);
     else XtUnmanageChild(child);
 
