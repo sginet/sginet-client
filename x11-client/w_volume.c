@@ -168,10 +168,10 @@ static void volume_sync(void) {
     XtSetSensitive(tgl_mute, True);
     XtSetSensitive(scl_volume, muted ? False : True);
 }
-Widget volume_create(Widget main_win) {
+Widget volume_create(Widget parent) {
     XmString str;
 
-    volume_bar = XtVaCreateWidget("volume_bar", xmFormWidgetClass, main_win, NULL);
+    volume_bar = XtVaCreateWidget("volume_bar", xmFormWidgetClass, parent, NULL);
 
     /* created with the widest text and fixed in size, so the scale does not move */
     str = XmStringCreateLocalized("Volume: 100%");
@@ -220,8 +220,6 @@ Widget volume_create(Widget main_win) {
     XtAddCallback(scl_volume, XmNvalueChangedCallback, volume_changed_callback, NULL);
     XtAddCallback(scl_volume, XmNdragCallback, volume_changed_callback, NULL);
 
-    /* the main window places its message window below the work area */
-    XtVaSetValues(main_win, XmNmessageWindow, volume_bar, NULL);
     return volume_bar;
 }
 /* File > Show volume control */
@@ -234,4 +232,5 @@ void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data
     } else {
         XtUnmanageChild(volume_bar);
     }
+    bottom_area_update();
 }

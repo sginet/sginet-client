@@ -26,10 +26,10 @@
 
 #define MAX_SYSTEM_LIST_LINE_LENGTH 1024
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261110-1105-X_5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261110-1840-X_5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261110-1105-X_6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261110-1840-X_6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_6" /* must be 3 chars */
 #endif
 #define SCREENSHOT_FULLSCREEN 0
@@ -63,9 +63,16 @@ void splash_hide(void);
 void show_fatal_error(Widget parent, const char *msg);
 Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height, unsigned long *track, int *num_track);
 
+/* container below the systems list for the volume and CPU load bars (main.c) */
+void bottom_area_update(void);
+
 /* volume control bar for the analog output (w_volume.c) */
-Widget volume_create(Widget main_win);
+Widget volume_create(Widget parent);
 void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
+
+/* gr_osview style CPU load bars, IRIX only (w_cpuload.c) */
+Widget cpuload_create(Widget parent);
+void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* registration form (w_register.c) */
 void register_show(Widget parent, void (*registered)(void));

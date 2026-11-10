@@ -17,6 +17,7 @@ int G_MODE = MODE_DAEMON;
 char G_CLIENTID[64];
 static Widget scrolled_systems_list = NULL;
 static Widget lbl_online = NULL;
+static Widget bottom_area = NULL; /* volume + CPU load bars below the systems list */
 static Cursor busy_cursor = None;
 static XtIntervalId refresh_timeout_id = 0;
 static XtAppContext app;
@@ -64,6 +65,19 @@ String fallback_resources[] = {
 };
 
 /* Watch cursor on the shell of w while a (blocking) cloud API call runs */
+/* show the bottom area only while one of its bars is visible, so no empty strip is left */
+void bottom_area_update(void) {
+    WidgetList children;
+    Cardinal num_children = 0, i;
+    int any = 0;
+    if (bottom_area == NULL) return;
+    XtVaGetValues(bottom_area, XmNchildren, &children, XmNnumChildren, &num_children, NULL);
+    for (i = 0; i < num_children; i++) {
+        if (XtIsManaged(children[i])) any = 1;
+    }
+    if (any) XtManageChild(bottom_area);
+    else XtUnmanageChild(bottom_area);
+}
 static Widget shell_of(Widget w) {
     while (w != NULL && !XtIsShell(w)) w = XtParent(w);
     return w;
@@ -144,6 +158,19 @@ Widget attachMainMenuBar(Widget main_win) {
         NULL);
     XmStringFree(str);
     XtAddCallback(item, XmNvalueChangedCallback, volume_toggle_callback, NULL);
+
+    str = XmStringCreateLocalized("Show CPU load");
+    item = XtVaCreateManagedWidget(
+        "Show CPU load", xmToggleButtonWidgetClass, file_menu,
+        XmNlabelString, str,
+        XmNvisibleWhenOff, True,
+        XmNset, False,
+        NULL);
+    XmStringFree(str);
+    XtAddCallback(item, XmNvalueChangedCallback, cpuload_toggle_callback, NULL);
+#if !defined(__sgi)
+    XtSetSensitive(item, False); /* CPU load is IRIX only */
+#endif
 
     item = create_menu_item(file_menu, "Check for updates");
     XtAddCallback(item, XmNactivateCallback, show_update_callback, (XtPointer)main_win);
@@ -461,8 +488,19 @@ static void start_main_window(void) {
     scrolled_win = XtParent(scrolled_systems_list);
     XmMainWindowSetAreas(main_win, main_win_menubar, online_bar, NULL, NULL, scrolled_win);
 
-    /* hidden until File > Show volume control */
-    volume_create(main_win);
+    /* message window below the list: volume control above CPU load, both hidden until enabled in the File menu */
+    bottom_area = XtVaCreateWidget(
+        "bottom_area", xmRowColumnWidgetClass, main_win,
+        XmNorientation, XmVERTICAL,
+        XmNpacking, XmPACK_COLUMN,
+        XmNnumColumns, 1,
+        XmNmarginWidth, 0,
+        XmNmarginHeight, 0,
+        XmNspacing, 0,
+        NULL);
+    volume_create(bottom_area);
+    cpuload_create(bottom_area);
+    XtVaSetValues(main_win, XmNmessageWindow, bottom_area, NULL);
 
     /* Schedule background refresh task */
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);

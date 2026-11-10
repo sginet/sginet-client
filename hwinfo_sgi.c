@@ -283,7 +283,12 @@ static void IRIXMachine_updateCPUcount(IRIXMachine *machine) {
     }
 
     machine->cpuData = realloc(machine->cpuData, s * sizeof(CPUData));
-    /* for (int i = 0; i < s; i++) machine->cpuData[i].online = false; */
+    if (machine->cpuData == NULL) {
+        machine->existingCPUs = 0;
+        machine->activeCPUs = 0;
+        return;
+    }
+    memset(machine->cpuData, 0, s * sizeof(CPUData));  /* no previous ticks yet */
 
     machine->existingCPUs = s;
 
@@ -302,6 +307,7 @@ static void IRIXMachine_updateCPUcount(IRIXMachine *machine) {
     machine->activeCPUs = s;
     machine->existingCPUs = s;
     machine->cpuData = realloc(machine->cpuData, (s + 1) * sizeof(CPUData));
+    memset(machine->cpuData, 0, (s + 1) * sizeof(CPUData));
     for (c = 0; c < s; c++) machine->cpuData[c].totalPercent = (c * 4);
 #endif
 }
@@ -344,7 +350,7 @@ static void IRIXMachine_scanCPUTime(IRIXMachine *machine) {
 #endif
 
     /* loop all cpus, ignore disabled cpus */
-    for (i = 0; i < machine->existingCPUs; i++) {
+    for (i = 0; i < (unsigned int)cpu_count; i++) {
         double totalPercent;
         unsigned long long sysAllTime;
         double total;
@@ -369,10 +375,12 @@ static void IRIXMachine_scanCPUTime(IRIXMachine *machine) {
         cpu->sysAllPeriod = saturatingSub(sysAllTime, cpu->sysAllTime);
         cpu->intrPeriod = saturatingSub(si[i].cpu[CPU_INTR], cpu->intrTime);
         cpu->idlePeriod = saturatingSub(si[i].cpu[CPU_IDLE], cpu->idleTime);
+        cpu->waitTimePeriod = saturatingSub(si[i].cpu[CPU_WAIT], cpu->waitTime);
 
         cpu->totalTime = totalTime;
         cpu->userTime = si[i].cpu[CPU_USER];
         cpu->sysTime = si[i].cpu[CPU_KERNEL];
+        cpu->sxbrkTime = si[i].cpu[CPU_SXBRK];
         cpu->waitTime = si[i].cpu[CPU_WAIT];
 
         cpu->sysAllTime = sysAllTime;
@@ -386,6 +394,7 @@ static void IRIXMachine_scanCPUTime(IRIXMachine *machine) {
         cpu->pct_normal = cpu->userPeriod / total * 100.0;
         cpu->pct_irq = cpu->intrPeriod / total * 100.0;
         cpu->pct_kernel = cpu->sysPeriod / total * 100.0;
+        cpu->pct_wait = (cpu->waitTimePeriod + cpu->sxbrkPeriod) / total * 100.0;
 
         totalPercent = cpu->pct_normal + cpu->pct_kernel + cpu->pct_nice + cpu->pct_irq + cpu->pct_nice;
         cpu->totalPercent = CLAMP(totalPercent, 0.0, 100.0);
@@ -444,6 +453,9 @@ static void IRIXMachine_scanMemoryInfo(IRIXMachine *machine) {
     machine->totalSwap = 256 * 1024;
     machine->usedSwap = 64 * 1024;
 #endif
+}
+void Machine_scanCPU(IRIXMachine *machine) {
+    IRIXMachine_scanCPUTime(machine);
 }
 void Machine_scan(IRIXMachine *machine) {
     IRIXMachine_scanCPUTime(machine);

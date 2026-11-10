@@ -49,6 +49,7 @@ typedef struct CPUData_ {
    double pct_normal;
    double pct_irq;
    double pct_kernel;
+   double pct_wait;   /* CPU_WAIT + CPU_SXBRK */
 } CPUData;
 
 typedef struct IRIXMachine_ {
@@ -94,6 +95,7 @@ int readHINVCmd(char* cmd, char* returnValue);
 int parse_uptime_loadavg(double *avg1, double *avg5, double *avg15);
 
 void Machine_scan(IRIXMachine *machine);
+void Machine_scanCPU(IRIXMachine *machine);  /* CPU times only, no memory/swap */
 IRIXMachine *Machine_new();
 void freeMachineInfo(IRIXMachine *machine);
 
