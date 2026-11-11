@@ -141,6 +141,7 @@ static void cpuload_tick(XtPointer client_data, XtIntervalId *id) {
 
 Widget cpuload_create(Widget parent) {
     Dimension height;
+    Pixel bg;
 
 #if defined(__sgi)
     machine = Machine_new(); /* CPU count, per-CPU tick counters */
@@ -160,6 +161,10 @@ Widget cpuload_create(Widget parent) {
         XmNmarginWidth, 0,
         XmNmarginHeight, 0,
         NULL);
+    /* IRIX schemes (sgiMode) give a drawing area its own background, use the
+       parent's like the volume strip so the margins and gaps match */
+    XtVaGetValues(parent, XmNbackground, &bg, NULL);
+    XmChangeColor(cpuload_bar, bg);
     XtAddCallback(cpuload_bar, XmNexposeCallback, cpuload_expose_callback, NULL);
     return cpuload_bar;
 }
