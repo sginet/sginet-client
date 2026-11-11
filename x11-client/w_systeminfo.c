@@ -4,6 +4,7 @@
 #define WRAP_COLUMNS 60      /* long hinv values are word-wrapped to this many characters */
 #define GRID_ROW_SPACING 3   /* vertical gap between grid rows in pixels */
 #define GRID_COLUMN_GAP 12   /* horizontal gap between label and value column */
+extern Widget toplevel;
 extern MachineListEntry *lstSystems;
 extern int numSystems;
 
@@ -71,6 +72,20 @@ static Widget create_label(Widget parent, const char *name, const char *text, un
     return lbl;
 }
 
+static Widget add_header_line(Widget header, const char *name, const char *text, Widget above, Pixel bg) {
+    Widget lbl = create_label(header, name, text, XmALIGNMENT_BEGINNING);
+    XtVaSetValues(lbl,
+        XmNbackground, bg,
+        XmNtopAttachment, XmATTACH_WIDGET,
+        XmNtopWidget, above,
+        XmNtopOffset, 2,
+        XmNleftAttachment, XmATTACH_OPPOSITE_WIDGET,
+        XmNleftWidget, above,
+        XmNrightAttachment, XmATTACH_FORM,
+        NULL);
+    return lbl;
+}
+
 static void build_header(Widget header, MachineListEntry *sys) {
     Widget icon, title, byline, subtitle;
     Pixel white;
@@ -109,36 +124,18 @@ static void build_header(Widget header, MachineListEntry *sys) {
         XmNrightAttachment, XmATTACH_FORM,
         NULL);
 
+    /* one label per line (no multi-line XmString) so all header lines get the same spacing */
     snprintf(text, sizeof(text), "by %s", sys->username);
-    byline = create_label(header, "byline", text, XmALIGNMENT_BEGINNING);
-    XtVaSetValues(byline,
-        XmNbackground, white,
-        XmNtopAttachment, XmATTACH_WIDGET,
-        XmNtopWidget, title,
-        XmNtopOffset, 2,
-        XmNleftAttachment, XmATTACH_OPPOSITE_WIDGET,
-        XmNleftWidget, title,
-        XmNrightAttachment, XmATTACH_FORM,
-        NULL);
+    byline = add_header_line(header, "byline", text, title, white);
+
+    snprintf(text, sizeof(text), "%s (%s), %s CPU%s",
+        sys->modelname, sys->ipmodel, sys->cpuCountStr, sys->cpuCount == 1 ? "" : "s");
+    subtitle = add_header_line(header, "subtitle", text, byline, white);
 
     if (sys->gfx0[0] != '\0') {
-        snprintf(text, sizeof(text), "%s (%s), %s CPU%s\nGFX: %s",
-            sys->modelname, sys->ipmodel, sys->cpuCountStr, sys->cpuCount == 1 ? "" : "s",
-            sys->gfx0);
-    } else {
-        snprintf(text, sizeof(text), "%s (%s), %s CPU%s",
-            sys->modelname, sys->ipmodel, sys->cpuCountStr, sys->cpuCount == 1 ? "" : "s");
+        snprintf(text, sizeof(text), "GFX: %s", sys->gfx0);
+        add_header_line(header, "subtitle", text, subtitle, white);
     }
-    subtitle = create_label(header, "subtitle", text, XmALIGNMENT_BEGINNING);
-    XtVaSetValues(subtitle,
-        XmNbackground, white,
-        XmNtopAttachment, XmATTACH_WIDGET,
-        XmNtopWidget, byline,
-        XmNtopOffset, 2,
-        XmNleftAttachment, XmATTACH_OPPOSITE_WIDGET,
-        XmNleftWidget, title,
-        XmNrightAttachment, XmATTACH_FORM,
-        NULL);
 }
 
 /* One row per hinv entry: right-aligned bold label column, value column takes the rest */
@@ -154,7 +151,7 @@ static void build_grid(Widget grid, LabelAndValue *lst, int count) {
     for (i = 0; i < count; ++i) {
         Widget val;
 
-        snprintf(name, sizeof(name), "lbl_%d", i);
+        snprintf(name, sizeof(name), "lbl"); /* same name per column, resources match by name */
         labels[i] = create_label(grid, name, lst[i].label, XmALIGNMENT_END);
         XtVaSetValues(labels[i],
             XmNtopAttachment, prev ? XmATTACH_WIDGET : XmATTACH_FORM,
@@ -166,7 +163,7 @@ static void build_grid(Widget grid, LabelAndValue *lst, int count) {
             NULL);
 
         wrap_value(wrapped, sizeof(wrapped), lst[i].value);
-        snprintf(name, sizeof(name), "val_%d", i);
+        snprintf(name, sizeof(name), "val");
         val = create_label(grid, name, wrapped, XmALIGNMENT_BEGINNING);
         XtVaSetValues(val,
             XmNtopAttachment, XmATTACH_OPPOSITE_WIDGET,
@@ -210,9 +207,8 @@ void sysinfo_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     busy_end(w);
 
     snprintf(title, sizeof(title), "%s - HINV", sys->machinename);
-    popup = XtVaAppCreateShell(
-        "HINV", "ScrolledTextPopup",
-        topLevelShellWidgetClass, XtDisplay(w),
+    popup = XtVaCreatePopupShell(
+        "HINV", topLevelShellWidgetClass, toplevel,
         XmNtitle, title,
         XmNdeleteResponse, XmDESTROY,
         NULL);
@@ -298,9 +294,13 @@ void sysinfo_callback(Widget w, XtPointer client_data, XtPointer call_data) {
 
     XtVaGetValues(scrolledWin, XmNclipWindow, &clip, NULL);
     if (clip) {
+        /* background of scroll box gray */
+        Pixel gridBg;
+        XtVaGetValues(grid, XmNbackground, &gridBg, NULL);
+        XtVaSetValues(clip, XmNbackground, gridBg, NULL);
         XtAddEventHandler(clip, StructureNotifyMask, False, clip_resize_handler, (XtPointer)grid);
     }
 
     XtManageChild(form);
-    XtRealizeWidget(popup);
+    XtPopup(popup, XtGrabNone);
 }
