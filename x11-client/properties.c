@@ -41,6 +41,16 @@ int property_get_int(const char *key, int default_value) {
     return result;
 }
 
+/* written to a newly created file, so the user can see and change them */
+static const struct {
+    const char *key;
+    int value;
+} property_defaults[] = {
+    { PROP_RESTORE_POSITION, 1 },
+    { PROP_RESTORE_WIDTH, 1 },
+};
+#define NUM_PROPERTY_DEFAULTS (sizeof(property_defaults) / sizeof(property_defaults[0]))
+
 /* rewrite the file with key=value replaced (or appended), via a temp file and rename() */
 int property_set_int(const char *key, int value) {
     char path[1024];
@@ -48,7 +58,7 @@ int property_set_int(const char *key, int value) {
     char line[PROP_LINE_MAX];
     FILE *in, *out;
     int written = 0;
-    size_t len;
+    size_t len, i;
 
     properties_path(path, sizeof(path));
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
@@ -71,6 +81,12 @@ int property_set_int(const char *key, int value) {
             if (len > 0 && line[len - 1] != '\n') fputc('\n', out);
         }
         fclose(in);
+    } else {
+        /* new file: start with the defaults */
+        for (i = 0; i < NUM_PROPERTY_DEFAULTS; i++) {
+            if (strcmp(property_defaults[i].key, key) == 0) continue;
+            fprintf(out, "%s=%d\n", property_defaults[i].key, property_defaults[i].value);
+        }
     }
     if (!written) fprintf(out, "%s=%d\n", key, value);
     if (fclose(out) != 0 || rename(tmp_path, path) != 0) {

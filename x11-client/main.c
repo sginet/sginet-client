@@ -13,6 +13,8 @@
 
 int debug = 0;
 static int show_splash = 1; /* --nosplash */
+static int restore_position = 1; /* --norestore-position */
+static int restore_width = 1;    /* --norestore-width */
 int G_MODE = MODE_DAEMON;
 
 char G_CLIENTID[64];
@@ -74,21 +76,16 @@ String fallback_resources[] = {
 static int win_x, win_y, win_w, win_h;
 static int win_geometry_valid = 0;
 
-/* top-left of the outermost ancestor below the root window (the WM frame, or the window itself) */
-static void frame_position(Window w, int *x, int *y) {
-    Display *dpy = XtDisplay(toplevel);
-    Window root, parent, *kids;
-    unsigned int nkids, fw, fh, bw, depth;
-    int fx, fy;
-    for (;;) {
-        if (!XQueryTree(dpy, w, &root, &parent, &kids, &nkids)) return;
-        if (kids != NULL) XFree(kids);
-        if (parent == root || parent == None) break;
-        w = parent;
-    }
-    if (XGetGeometry(dpy, w, &root, &fx, &fy, &fw, &fh, &bw, &depth)) {
-        *x = fx;
-        *y = fy;
+/* top-left of the client window (inside the window manager frame) in root window coordinates.
+   Restored with StaticGravity the window manager places the client window there again (4Dwm
+   does this anyway), saving the frame corner would drift by the decoration size on every start */
+static void window_position(Window w, int *x, int *y) {
+    Window child;
+    int rx, ry;
+    if (XTranslateCoordinates(XtDisplay(toplevel), w, RootWindowOfScreen(XtScreen(toplevel)),
+            0, 0, &rx, &ry, &child)) {
+        *x = rx;
+        *y = ry;
     }
 }
 static void window_geometry_track(Widget w, XtPointer client_data, XEvent *event, Boolean *cont) {
@@ -98,16 +95,16 @@ static void window_geometry_track(Widget w, XtPointer client_data, XEvent *event
     } else if (event->type != ReparentNotify && event->type != MapNotify) {
         return;
     }
-    frame_position(XtWindow(toplevel), &win_x, &win_y);
+    window_position(XtWindow(toplevel), &win_x, &win_y);
     win_geometry_valid = 1;
 }
-/* after realize: start from the current size, the frame position follows with Map/ReparentNotify */
+/* after realize: start from the current size, the final position follows with Map/ReparentNotify */
 static void window_geometry_init(void) {
     Dimension w = 0, h = 0;
     XtVaGetValues(toplevel, XmNwidth, &w, XmNheight, &h, NULL);
     win_w = w;
     win_h = h;
-    frame_position(XtWindow(toplevel), &win_x, &win_y);
+    window_position(XtWindow(toplevel), &win_x, &win_y);
     win_geometry_valid = 1;
 }
 static void window_geometry_save(void) {
@@ -121,17 +118,23 @@ static void window_geometry_save(void) {
 static void window_geometry_restore(void) {
     static char geometry[64]; /* the shell copies it, static to be safe */
     String current = NULL;
+    Dimension cur_w = 0;
     Screen *scr = XtScreen(toplevel);
     int sw = WidthOfScreen(scr), sh = HeightOfScreen(scr);
-    int x, y, w, h;
+    int x, y, w, h, use_pos, use_width;
+    char *p = geometry;
 
-    XtVaGetValues(toplevel, XmNgeometry, &current, NULL);
+    XtVaGetValues(toplevel, XmNgeometry, &current, XmNwidth, &cur_w, NULL);
     if (current != NULL) return;
     w = property_get_int(PROP_WINDOW_WIDTH, 0);
     h = property_get_int(PROP_WINDOW_HEIGHT, 0);
     if (w <= 0 || h <= 0) return; /* first run: default size, the window manager places it */
     x = property_get_int(PROP_WINDOW_X, 0);
     y = property_get_int(PROP_WINDOW_Y, 0);
+    /* suppressed by the command line option or in the properties file */
+    use_pos = restore_position && property_get_int(PROP_RESTORE_POSITION, 1);
+    use_width = restore_width && property_get_int(PROP_RESTORE_WIDTH, 1);
+    if (!use_width) w = cur_w; /* default width, used to keep the position on the screen */
 
     if (w < WINDOW_MIN_WIDTH) w = WINDOW_MIN_WIDTH;
     if (h < WINDOW_MIN_HEIGHT) h = WINDOW_MIN_HEIGHT;
@@ -141,9 +144,14 @@ static void window_geometry_restore(void) {
     if (y > sh - h) y = sh - h;
     if (x < 0) x = 0;
     if (y < 0) y = 0;
-    sprintf(geometry, "%dx%d+%d+%d", w, h, x, y);
+
+    /* "WxH+X+Y", the width ("xH") and the position may be left out */
+    if (use_width) p += sprintf(p, "%d", w);
+    p += sprintf(p, "x%d", h);
+    if (use_pos) sprintf(p, "+%d+%d", x, y);
     if (debug) printf("[xsginet] restoring window geometry %s\n", geometry);
     XtVaSetValues(toplevel, XmNgeometry, geometry, NULL);
+    if (use_pos) XtVaSetValues(toplevel, XmNwinGravity, StaticGravity, NULL);
 }
 static void wm_delete_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     onQuit();
@@ -466,6 +474,8 @@ void error_usage(void) {
     fprintf(stderr, "  -u  check for new version and upgrade xsginet\n");
     fprintf(stderr, "  -d  debug mode\n");
     fprintf(stderr, "  --nosplash  do not show the splash screen on startup\n");
+    fprintf(stderr, "  --norestore-position  do not restore the saved window position\n");
+    fprintf(stderr, "  --norestore-width     do not restore the saved window width\n");
     if (debug) {
         fprintf(stderr, "  --ca-cert-bundle PATH  add CA certificates from a PEM bundle\n");
         fprintf(stderr, "  --sginet-bin PATH      xsginet binary for updater\n");
@@ -497,6 +507,10 @@ int argParser(int argc, char* argv[]) {
             exit(EXIT_SUCCESS);
         } else if (strcmp(a, "--nosplash") == 0) {
             show_splash = 0;
+        } else if (strcmp(a, "--norestore-position") == 0) {
+            restore_position = 0;
+        } else if (strcmp(a, "--norestore-width") == 0) {
+            restore_width = 0;
         } else if (strcmp(a, "--ca-cert-bundle") == 0) {
             if (i + 1 >= argc) error_usage();
             i += 1;
@@ -627,7 +641,7 @@ static void start_main_window(void) {
     if (show_volume) volume_show(True, False);
     if (show_cpu_load) cpuload_show(True, False);
 
-    /* track size and frame position for saving on quit */
+    /* track size and position for saving on quit */
     XtAddEventHandler(toplevel, StructureNotifyMask, False, window_geometry_track, NULL);
     XtRealizeWidget(toplevel);
     window_geometry_init();

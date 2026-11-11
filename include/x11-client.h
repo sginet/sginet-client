@@ -70,11 +70,14 @@ void bottom_area_show(Widget child, Boolean show, Boolean resize_window);
 /* user settings in ~/.sginet-properties (properties.c) */
 #define PROP_SHOW_VOLUME "xsginet_show_volume_control"
 #define PROP_SHOW_CPU_LOAD "xsginet_show_cpu_load"
-/* main window geometry: frame position (top-left of the window manager frame) and size */
+/* main window geometry: client window position (inside the window manager frame) and size */
 #define PROP_WINDOW_X "xsginet_window_x"
 #define PROP_WINDOW_Y "xsginet_window_y"
 #define PROP_WINDOW_WIDTH "xsginet_window_width"
 #define PROP_WINDOW_HEIGHT "xsginet_window_height"
+/* 0: do not restore the saved position / width on startup (like --norestore-position / --norestore-width) */
+#define PROP_RESTORE_POSITION "xsginet_restore_position"
+#define PROP_RESTORE_WIDTH "xsginet_restore_width"
 int property_get_int(const char *key, int default_value);
 int property_set_int(const char *key, int value);
 
