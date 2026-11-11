@@ -40,7 +40,14 @@ setenv TMPDIR /usr/tmp
 
 If the make-tardist-IRIX5.sh script runs out of space, also change the WORK env. variable to point to a directory in a parition with enough space. 
 
-Start building:
+
+To create a tar file of this repo (without .git overhead) for the IRIX 5 machine:
+
+```sh
+git archive --format=tar -o sginet.tar HEAD
+```
+
+on IRIX 5, start building:
 
 ```sh
 sh third_party/build-ncurses.sh
