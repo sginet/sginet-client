@@ -43,11 +43,16 @@ String fallback_resources[] = {
     "SGINet*scrolled_systems_listSW.scrolled_systems_list.foreground: #0602d8",
     "SGINet*main_win*lbl_online.fontList: -*-helvetica-bold-r-normal-*-14-*-*-*-*-*-*-*",
 
-    "HINV*hinvWin.scrolledWin.textWidget.fontList: -misc-fixed-medium-r-normal--14-*-*-*-c-*-iso8859-1",
-    "HINV*hinvWin.scrolledWin.textWidget.foreground: #0602d8",
-    /* initial window size in characters, the window shrink-wraps the text widget */
-    "HINV*hinvWin.scrolledWin.textWidget.columns: 80",
-    "HINV*hinvWin.scrolledWin.textWidget.rows: 30",
+    "HINV*header.title.fontList: -*-helvetica-bold-r-normal-*-18-*-*-*-*-*-*-*",
+    "HINV*header.byline.fontList: -*-helvetica-medium-o-normal-*-12-*-*-*-*-*-*-*",
+    "HINV*header.subtitle.fontList: -*-helvetica-medium-r-normal-*-12-*-*-*-*-*-*-*",
+    "HINV*grid*lbl_*.fontList: -*-helvetica-bold-r-normal-*-12-*-*-*-*-*-*-*",
+    "HINV*grid*val_*.fontList: -*-helvetica-medium-r-normal-*-12-*-*-*-*-*-*-*",
+    "HINV*grid*val_*.foreground: #0602d8",
+    "HINV*btnClose.fontList: -*-clean-*-*-*-*-12-*-*-*-*-*-*-*",
+    /* initial window size, the window shrink-wraps the scrolled grid */
+    "HINV*hinvForm.scrolledWin.width: 560",
+    "HINV*hinvForm.scrolledWin.height: 420",
 
     "*screenshot_dialog*dspScreenshot*foreground: #0602d8",
     "*screenshot_dialog*dspScreenshot*fontList: -*-clean-*-*-*-*-12-*-*-*-*-*-*-*",

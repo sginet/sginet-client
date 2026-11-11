@@ -68,6 +68,10 @@ static unsigned long alloc_pixel(Display *dpy, Colormap cmap, const char *spec, 
     }
     return best.pixel;
 }
+/* sgicube logo data, shared with the HINV window header (w_systeminfo.c) */
+char **sgicube_xpm_data(void) {
+    return sgicube_xpm;
+}
 /*
  * Minimal XPM reader (no libXpm on IRIX 5.x): 1-2 chars per pixel,
  * colors "#RRGGBB" or "None" (drawn in bg). Returns None on bad data.

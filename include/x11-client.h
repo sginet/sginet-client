@@ -26,10 +26,10 @@
 
 #define MAX_SYSTEM_LIST_LINE_LENGTH 1024
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261111-0940-X_5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261111-1205-X_5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261111-0940-X_6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261111-1205-X_6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_6" /* must be 3 chars */
 #endif
 #define SCREENSHOT_FULLSCREEN 0
@@ -62,6 +62,7 @@ void splash_show(Widget parent);
 void splash_hide(void);
 void show_fatal_error(Widget parent, const char *msg);
 Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height, unsigned long *track, int *num_track);
+char **sgicube_xpm_data(void);
 
 /* container below the systems list for the volume and CPU load bars (main.c).
    resize_window: grow/shrink the window height by the strip (menu toggle), not on startup */
