@@ -1,9 +1,8 @@
-/* gr_osview style CPU load bars (one row per CPU), shown below the volume control. IRIX only. */
+/* gr_osview style CPU load bars (one row per CPU), shown below the volume control.
+   CPU load is measured on IRIX only; on linux dev system static bars are shown for debugging the layout. */
 #include "../include/hwinfo_sgi.h"
 #include "../include/x11-client.h"
 #include <Xm/DrawingA.h>
-
-#if defined(__sgi)
 
 #define CPULOAD_INTERVAL 250 /* ms between samples */
 #define CPULOAD_MAX_CPUS 64
@@ -23,12 +22,16 @@ static const char *seg_color_names[SEG_COUNT] = {
 };
 
 static Widget cpuload_bar = NULL;
+#if defined(__sgi)
 static IRIXMachine *machine = NULL;
+static XtIntervalId tick_id = 0;
+static int frame_ms = 0;  /* ms since the last sample */
+#else
+#define CPULOAD_DUMMY_CPUS 4 /* static bars without load measurement */
+#endif
 static int num_cpus = 0;
 static GC gc = NULL;
 static Pixel seg_pixel[SEG_COUNT];
-static XtIntervalId tick_id = 0;
-static int frame_ms = 0;  /* ms since the last sample */
 /* displayed percentages: rise at once to a new sample, decrease slowly */
 static double shown[CPULOAD_MAX_CPUS][SEG_IDLE];
 
@@ -54,7 +57,7 @@ static void cpuload_draw(void) {
     int bar_w, inner_w, inner_h, x_end, c, s, x, y, seg_w;
     double *pct;
 
-    if (cpuload_bar == NULL || !XtIsRealized(cpuload_bar) || machine == NULL) return;
+    if (cpuload_bar == NULL || !XtIsRealized(cpuload_bar) || num_cpus < 1) return;
     dpy = XtDisplay(cpuload_bar);
     win = XtWindow(cpuload_bar);
     if (gc == NULL) {
@@ -99,6 +102,7 @@ static void cpuload_expose_callback(Widget w, XtPointer client_data, XtPointer c
     cpuload_draw();
 }
 
+#if defined(__sgi)
 /* move the displayed values towards the last sample: up at once, down by the falloff rate.
    Returns 1 if any displayed value changed. */
 static int cpuload_step(int jump) {
@@ -133,12 +137,19 @@ static void cpuload_tick(XtPointer client_data, XtIntervalId *id) {
     tick_id = XtAppAddTimeOut(XtWidgetToApplicationContext(cpuload_bar), CPULOAD_FRAME, cpuload_tick, NULL);
 }
 
+#endif /* __sgi */
+
 Widget cpuload_create(Widget parent) {
     Dimension height;
 
+#if defined(__sgi)
     machine = Machine_new(); /* CPU count, per-CPU tick counters */
     if (machine == NULL || machine->existingCPUs < 1) return NULL;
     num_cpus = machine->existingCPUs;
+#else
+    /* no load measurement: fixed bars, all idle */
+    num_cpus = CPULOAD_DUMMY_CPUS;
+#endif
     if (num_cpus > CPULOAD_MAX_CPUS) num_cpus = CPULOAD_MAX_CPUS;
 
     height = 2 * CPULOAD_MARGIN + num_cpus * CPULOAD_BAR_H + (num_cpus - 1) * CPULOAD_GAP;
@@ -155,6 +166,7 @@ Widget cpuload_create(Widget parent) {
 
 void cpuload_show(Boolean show) {
     if (cpuload_bar == NULL) return;
+#if defined(__sgi)
     if (show) {
         Machine_scanCPU(machine); /* baseline, the first sample shows the load since now */
         cpuload_step(1);          /* no falloff from values of a previous show */
@@ -167,6 +179,7 @@ void cpuload_show(Boolean show) {
             tick_id = 0;
         }
     }
+#endif
     bottom_area_show(cpuload_bar, show);
 }
 /* File > Show CPU load */
@@ -175,15 +188,3 @@ void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_dat
     cpuload_show(cbs->set ? True : False);
     property_set_int(PROP_SHOW_CPU_LOAD, cbs->set ? 1 : 0);
 }
-
-#else /* !__sgi: disabled if not sgi */
-
-Widget cpuload_create(Widget parent) {
-    return NULL;
-}
-void cpuload_show(Boolean show) {
-}
-void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
-}
-
-#endif

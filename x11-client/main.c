@@ -204,9 +204,6 @@ Widget attachMainMenuBar(Widget main_win) {
         NULL);
     XmStringFree(str);
     XtAddCallback(item, XmNvalueChangedCallback, cpuload_toggle_callback, NULL);
-#if !defined(__sgi)
-    XtSetSensitive(item, False); /* CPU load is IRIX only */
-#endif
 
     item = create_menu_item(file_menu, "Check for updates");
     XtAddCallback(item, XmNactivateCallback, show_update_callback, (XtPointer)main_win);
@@ -528,8 +525,7 @@ static void start_main_window(void) {
     bottom_area = XtVaCreateWidget(
         "bottom_area", xmRowColumnWidgetClass, main_win,
         XmNorientation, XmVERTICAL,
-        XmNpacking, XmPACK_COLUMN,
-        XmNnumColumns, 1,
+        XmNpacking, XmPACK_TIGHT,
         XmNmarginWidth, 0,
         XmNmarginHeight, 0,
         XmNspacing, 0,
@@ -568,9 +564,7 @@ int main(int argc, char *argv[]) {
     argc = argParser(argc, argv);
 
     show_volume = property_get_int(PROP_SHOW_VOLUME, 0);
-#if defined(__sgi)
     show_cpu_load = property_get_int(PROP_SHOW_CPU_LOAD, 0);
-#endif
 
     if (debug) printf("G_CLIENTID: %s\n", G_CLIENTID);
 
