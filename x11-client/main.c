@@ -74,20 +74,16 @@ static int managed_height(Widget w) {
     XtVaGetValues(w, XmNheight, &h, XmNborderWidth, &bw, NULL);
     return h + 2 * bw;
 }
-/*
- * Show or hide one strip below the systems list. The bottom area is only
- * managed while one of its strips is visible. The main window only gives a
- * changed message window its space on a resize, so the shell is resized by
- * the height difference (the list keeps its size), with a 1 pixel nudge to
- * force the re-layout even if the height did not change.
- */
-void bottom_area_show(Widget child, Boolean show) {
+void bottom_area_show(Widget child, Boolean show, Boolean resize_window) {
     WidgetList children;
     Cardinal num_children = 0, i;
     XtWidgetGeometry pref;
-    Dimension shell_h = 0;
+    Dimension shell_w = 0, shell_h = 0;
     int any = 0, old_h, new_h, target;
     if (bottom_area == NULL || child == NULL) return;
+
+    if (!XtIsRealized(toplevel)) resize_window = False;
+    if (resize_window) XtVaGetValues(toplevel, XmNwidth, &shell_w, XmNheight, &shell_h, NULL);
 
     old_h = managed_height(bottom_area);
     if (show) XtManageChild(child);
@@ -106,12 +102,11 @@ void bottom_area_show(Widget child, Boolean show) {
     if (any) XtManageChild(bottom_area);
     else XtUnmanageChild(bottom_area);
 
-    if (!XtIsRealized(toplevel)) return;
-    XtVaGetValues(toplevel, XmNheight, &shell_h, NULL);
+    if (!resize_window) return;
     target = (int)shell_h + new_h - old_h;
     if (target < 1) target = 1;
-    XtVaSetValues(toplevel, XmNheight, (Dimension)(target + 1), NULL);
-    XtVaSetValues(toplevel, XmNheight, (Dimension)target, NULL);
+    XtVaSetValues(toplevel, XmNwidth, shell_w, XmNheight, (Dimension)(target + 1), NULL);
+    XtVaSetValues(toplevel, XmNwidth, shell_w, XmNheight, (Dimension)target, NULL);
 }
 /* Watch cursor on the shell of w while a (blocking) cloud API call runs */
 static Widget shell_of(Widget w) {
@@ -537,12 +532,13 @@ static void start_main_window(void) {
     /* Schedule background refresh task */
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, (XtPointer)app);
 
+    /* restore the saved sections before realize: they are part of the initial
+       window size, no window resize on startup */
+    if (show_volume) volume_show(True, False);
+    if (show_cpu_load) cpuload_show(True, False);
+
     XtRealizeWidget(toplevel);
     alignOnlineLabel(main_win_menubar);
-
-    /* restore the saved sections after realize, so the window grows to fit them */
-    if (show_volume) volume_show(True);
-    if (show_cpu_load) cpuload_show(True);
 }
 int main(int argc, char *argv[]) {
     int rc;

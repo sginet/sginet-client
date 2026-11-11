@@ -169,7 +169,7 @@ Widget cpuload_create(Widget parent) {
     return cpuload_bar;
 }
 
-void cpuload_show(Boolean show) {
+void cpuload_show(Boolean show, Boolean resize_window) {
     if (cpuload_bar == NULL) return;
 #if defined(__sgi)
     if (show) {
@@ -185,11 +185,11 @@ void cpuload_show(Boolean show) {
         }
     }
 #endif
-    bottom_area_show(cpuload_bar, show);
+    bottom_area_show(cpuload_bar, show, resize_window);
 }
 /* File > Show CPU load */
 void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
-    cpuload_show(cbs->set ? True : False);
+    cpuload_show(cbs->set ? True : False, True);
     property_set_int(PROP_SHOW_CPU_LOAD, cbs->set ? 1 : 0);
 }

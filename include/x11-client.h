@@ -63,8 +63,9 @@ void splash_hide(void);
 void show_fatal_error(Widget parent, const char *msg);
 Pixmap pixmap_from_xpm(Widget w, char **xpm, Pixel bg, Dimension *width, Dimension *height, unsigned long *track, int *num_track);
 
-/* container below the systems list for the volume and CPU load bars (main.c) */
-void bottom_area_show(Widget child, Boolean show);
+/* container below the systems list for the volume and CPU load bars (main.c).
+   resize_window: grow/shrink the window height by the strip (menu toggle), not on startup */
+void bottom_area_show(Widget child, Boolean show, Boolean resize_window);
 
 /* user settings in ~/.sginet-properties (properties.c) */
 #define PROP_SHOW_VOLUME "xsginet_show_volume_control"
@@ -74,12 +75,12 @@ int property_set_int(const char *key, int value);
 
 /* volume control bar for the analog output (w_volume.c) */
 Widget volume_create(Widget parent);
-void volume_show(Boolean show);
+void volume_show(Boolean show, Boolean resize_window);
 void volume_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* gr_osview style CPU load bars, IRIX only (w_cpuload.c) */
 Widget cpuload_create(Widget parent);
-void cpuload_show(Boolean show);
+void cpuload_show(Boolean show, Boolean resize_window);
 void cpuload_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data);
 
 /* registration form (w_register.c) */
