@@ -2,6 +2,7 @@
 #include "../include/hwinfo_sgi.h"
 #include "../include/x11-client.h"
 #include <X11/cursorfont.h>
+#include <Xm/Protocols.h>
 #include <sys/wait.h>
 
 #include "res/camera.xpm"
@@ -67,6 +68,87 @@ String fallback_resources[] = {
     NULL
 };
 
+/* Main window geometry will be saved in ~/.sginet-properties */
+#define WINDOW_MIN_WIDTH 200
+#define WINDOW_MIN_HEIGHT 100
+static int win_x, win_y, win_w, win_h;
+static int win_geometry_valid = 0;
+
+/* top-left of the outermost ancestor below the root window (the WM frame, or the window itself) */
+static void frame_position(Window w, int *x, int *y) {
+    Display *dpy = XtDisplay(toplevel);
+    Window root, parent, *kids;
+    unsigned int nkids, fw, fh, bw, depth;
+    int fx, fy;
+    for (;;) {
+        if (!XQueryTree(dpy, w, &root, &parent, &kids, &nkids)) return;
+        if (kids != NULL) XFree(kids);
+        if (parent == root || parent == None) break;
+        w = parent;
+    }
+    if (XGetGeometry(dpy, w, &root, &fx, &fy, &fw, &fh, &bw, &depth)) {
+        *x = fx;
+        *y = fy;
+    }
+}
+static void window_geometry_track(Widget w, XtPointer client_data, XEvent *event, Boolean *cont) {
+    if (event->type == ConfigureNotify) {
+        win_w = event->xconfigure.width;
+        win_h = event->xconfigure.height;
+    } else if (event->type != ReparentNotify && event->type != MapNotify) {
+        return;
+    }
+    frame_position(XtWindow(toplevel), &win_x, &win_y);
+    win_geometry_valid = 1;
+}
+/* after realize: start from the current size, the frame position follows with Map/ReparentNotify */
+static void window_geometry_init(void) {
+    Dimension w = 0, h = 0;
+    XtVaGetValues(toplevel, XmNwidth, &w, XmNheight, &h, NULL);
+    win_w = w;
+    win_h = h;
+    frame_position(XtWindow(toplevel), &win_x, &win_y);
+    win_geometry_valid = 1;
+}
+static void window_geometry_save(void) {
+    if (!win_geometry_valid) return;
+    property_set_int(PROP_WINDOW_X, win_x);
+    property_set_int(PROP_WINDOW_Y, win_y);
+    property_set_int(PROP_WINDOW_WIDTH, win_w);
+    property_set_int(PROP_WINDOW_HEIGHT, win_h);
+}
+/* before realize: saved size/position, limited to the screen; a -geometry option wins */
+static void window_geometry_restore(void) {
+    static char geometry[64]; /* the shell copies it, static to be safe */
+    String current = NULL;
+    Screen *scr = XtScreen(toplevel);
+    int sw = WidthOfScreen(scr), sh = HeightOfScreen(scr);
+    int x, y, w, h;
+
+    XtVaGetValues(toplevel, XmNgeometry, &current, NULL);
+    if (current != NULL) return;
+    w = property_get_int(PROP_WINDOW_WIDTH, 0);
+    h = property_get_int(PROP_WINDOW_HEIGHT, 0);
+    if (w <= 0 || h <= 0) return; /* first run: default size, the window manager places it */
+    x = property_get_int(PROP_WINDOW_X, 0);
+    y = property_get_int(PROP_WINDOW_Y, 0);
+
+    if (w < WINDOW_MIN_WIDTH) w = WINDOW_MIN_WIDTH;
+    if (h < WINDOW_MIN_HEIGHT) h = WINDOW_MIN_HEIGHT;
+    if (w > sw) w = sw;
+    if (h > sh) h = sh;
+    if (x > sw - w) x = sw - w;
+    if (y > sh - h) y = sh - h;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    sprintf(geometry, "%dx%d+%d+%d", w, h, x, y);
+    if (debug) printf("[xsginet] restoring window geometry %s\n", geometry);
+    XtVaSetValues(toplevel, XmNgeometry, geometry, NULL);
+}
+static void wm_delete_callback(Widget w, XtPointer client_data, XtPointer call_data) {
+    onQuit();
+}
+
 /* current height of a managed widget including its border, 0 while hidden */
 static int managed_height(Widget w) {
     Dimension h = 0, bw = 0;
@@ -107,6 +189,13 @@ void bottom_area_show(Widget child, Boolean show, Boolean resize_window) {
     if (target < 1) target = 1;
     XtVaSetValues(toplevel, XmNwidth, shell_w, XmNheight, (Dimension)(target + 1), NULL);
     XtVaSetValues(toplevel, XmNwidth, shell_w, XmNheight, (Dimension)target, NULL);
+
+    /* the new size arrives later with ConfigureNotify, save the requested one now */
+    if (win_geometry_valid) {
+        win_w = shell_w;
+        win_h = target;
+    }
+    window_geometry_save();
 }
 /* Watch cursor on the shell of w while a (blocking) cloud API call runs */
 static Widget shell_of(Widget w) {
@@ -430,6 +519,7 @@ static void systemlist_refresh_function(XtPointer client_data, XtIntervalId *id)
 }
 void onQuit(void) {
     if (debug) printf("[xsginet] Shutting down..\n");
+    window_geometry_save();
     if (lstSystems != NULL) {
         if (debug) printf("[xsginet] freeing lstSystems\n");
         free(lstSystems);
@@ -537,7 +627,10 @@ static void start_main_window(void) {
     if (show_volume) volume_show(True, False);
     if (show_cpu_load) cpuload_show(True, False);
 
+    /* track size and frame position for saving on quit */
+    XtAddEventHandler(toplevel, StructureNotifyMask, False, window_geometry_track, NULL);
     XtRealizeWidget(toplevel);
+    window_geometry_init();
     alignOnlineLabel(main_win_menubar);
 }
 int main(int argc, char *argv[]) {
@@ -588,6 +681,11 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Unknown option: %s\n", argv[1]);
         error_usage();
     }
+    window_geometry_restore();
+    /* window manager close button: quit like File > Quit, so the geometry is saved */
+    XtVaSetValues(toplevel, XmNdeleteResponse, XmDO_NOTHING, NULL);
+    XmAddWMProtocolCallback(toplevel, XmInternAtom(XtDisplay(toplevel), "WM_DELETE_WINDOW", False),
+        wm_delete_callback, NULL);
 
     /* Say hello to the cloud, an unregistered machine must register first */
     if (show_splash) splash_show(toplevel);

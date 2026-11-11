@@ -26,10 +26,10 @@
 
 #define MAX_SYSTEM_LIST_LINE_LENGTH 1024
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261110-1840-X_5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261111-0940-X_5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261110-1840-X_6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261111-0940-X_6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_6" /* must be 3 chars */
 #endif
 #define SCREENSHOT_FULLSCREEN 0
@@ -70,6 +70,11 @@ void bottom_area_show(Widget child, Boolean show, Boolean resize_window);
 /* user settings in ~/.sginet-properties (properties.c) */
 #define PROP_SHOW_VOLUME "xsginet_show_volume_control"
 #define PROP_SHOW_CPU_LOAD "xsginet_show_cpu_load"
+/* main window geometry: frame position (top-left of the window manager frame) and size */
+#define PROP_WINDOW_X "xsginet_window_x"
+#define PROP_WINDOW_Y "xsginet_window_y"
+#define PROP_WINDOW_WIDTH "xsginet_window_width"
+#define PROP_WINDOW_HEIGHT "xsginet_window_height"
 int property_get_int(const char *key, int default_value);
 int property_set_int(const char *key, int value);
 
