@@ -26,10 +26,10 @@
 
 #define MAX_SYSTEM_LIST_LINE_LENGTH 1024
 #ifdef IRIX5
-#define THIS_CLIENT_VERSION "V20261111-1205-X_5" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261112-1155-X_5" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_5" /* must be 3 chars */
 #else
-#define THIS_CLIENT_VERSION "V20261111-1205-X_6" /* max 23 chars */
+#define THIS_CLIENT_VERSION "V20261112-1155-X_6" /* max 23 chars */
 #define THIS_CLIENT_TYPE "X_6" /* must be 3 chars */
 #endif
 #define SCREENSHOT_FULLSCREEN 0
@@ -39,7 +39,7 @@
 
 extern char G_CLIENTID[64];
 
-int loadSystemsListOnline(void);
+int loadSystemsList(void);
 int argParser(int argc, char* argv[]);
 void error_usage(void);
 Widget attachMainMenuBar(Widget main_win);

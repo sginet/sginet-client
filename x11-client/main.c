@@ -20,6 +20,8 @@ int G_MODE = MODE_DAEMON;
 char G_CLIENTID[64];
 static Widget scrolled_systems_list = NULL;
 static Widget lbl_online = NULL;
+static Widget chk_online = NULL; /* checkbox left of lbl_online: checked = online systems only (default) */
+static int show_all_systems = 0;  /* unchecked: list all systems */
 static Widget bottom_area = NULL; /* volume + CPU load bars below the systems list */
 /* section visibility from ~/.sginet-properties, read in main() */
 static int show_volume = 0;
@@ -241,9 +243,6 @@ static Widget create_menu_item(Widget menu, char *label) {
     XmStringFree(str);
     return item;
 }
-static void refresh_menu_item_callback(Widget w, XtPointer client_data, XtPointer call_data) {
-    loadSystemsListOnline();
-}
 static void quit_callback(Widget w, XtPointer client_data, XtPointer call_data) {
     onQuit();
 }
@@ -278,9 +277,6 @@ Widget attachMainMenuBar(Widget main_win) {
         "File", xmCascadeButtonWidgetClass, menubar,
         XmNsubMenuId, file_menu,
         NULL);
-
-    item = create_menu_item(file_menu, "Refresh online systems");
-    XtAddCallback(item, XmNactivateCallback, refresh_menu_item_callback, NULL);
 
     str = XmStringCreateLocalized("Show volume control");
     item = XtVaCreateManagedWidget(
@@ -365,7 +361,7 @@ static void updateOnlineLabel(void) {
     XmString str;
     char buf[32];
     if (lbl_online == NULL) return;
-    sprintf(buf, "Online: %d", numSystems);
+    sprintf(buf, "%s: %d", show_all_systems ? "All" : "Online", numSystems);
     str = XmStringCreateLocalized(buf);
     XtVaSetValues(lbl_online, XmNlabelString, str, NULL);
     XmStringFree(str);
@@ -382,39 +378,46 @@ static Dimension labelTextOffset(Widget w) {
     return highlight + shadow + margin_w + margin_l;
 }
 
-/* move the "Online: $n" text to align with "File" menu text */
+/* move the checkbox in front of "Online: $n" to align with "File" menu text */
 static void alignOnlineLabel(Widget menubar) {
     Widget cascade;
-    Position cascade_x = 0, menubar_x = 0, label_x = 0, bar_x = 0;
-    Dimension margin_l = 0;
+    Position cascade_x = 0, menubar_x = 0, chk_x = 0, bar_x = 0;
+    Dimension highlight = 0, shadow = 0, margin_w = 0;
     int target, current;
 
-    if (lbl_online == NULL) return;
+    if (chk_online == NULL) return;
     cascade = XtNameToWidget(menubar, "File");
     if (cascade == NULL) return;
 
     XtVaGetValues(cascade, XmNx, &cascade_x, NULL);
     XtVaGetValues(menubar, XmNx, &menubar_x, NULL);
-    XtVaGetValues(XtParent(lbl_online), XmNx, &bar_x, NULL);
-    XtVaGetValues(lbl_online, XmNx, &label_x, XmNmarginLeft, &margin_l, NULL);
+    XtVaGetValues(XtParent(chk_online), XmNx, &bar_x, NULL);
+    XtVaGetValues(chk_online,
+        XmNx, &chk_x,
+        XmNhighlightThickness, &highlight,
+        XmNshadowThickness, &shadow,
+        XmNmarginWidth, &margin_w,
+        NULL);
 
+    /* the indicator starts after highlight, shadow and margin */
     target = menubar_x + cascade_x + labelTextOffset(cascade);
-    current = bar_x + label_x + labelTextOffset(lbl_online) - margin_l;
+    current = bar_x + chk_x + highlight + shadow + margin_w;
     if (target > current)
-        XtVaSetValues(lbl_online, XmNmarginLeft, (Dimension)(target - current), NULL);
+        XtVaSetValues(chk_online, XmNleftOffset, target - current, NULL);
 }
-int loadSystemsListOnline(void) {
+int loadSystemsList(void) {
     int numItems, i, rc;
     MachineListEntry *lstNew;
     XmString strLine;
     char lineBuffer[MAX_SYSTEM_LIST_LINE_LENGTH];
     char strUptime[256];
 
-    /* Query online systems. The current list stays valid until the new one arrived. */
+    /* Query online or all systems. The current list stays valid until the new one arrived. */
     lstNew = NULL;
     numItems = 0;
     busy_begin(scrolled_systems_list);
-    rc = cloudAPI_showSystems(&lstNew, &numItems, REQTYPE_SHOWONLINESYSTEMS);
+    rc = cloudAPI_showSystems(&lstNew, &numItems,
+        show_all_systems ? REQTYPE_SHOWALLSYSTEMS : REQTYPE_SHOWONLINESYSTEMS);
     busy_end(scrolled_systems_list);
     if (rc == RESPONSE_REGISTRATION_REQUIRED) {
         if (cloudAPI_lastError()[0] != '\0') printf("Error: %s\n", cloudAPI_lastError());
@@ -435,7 +438,11 @@ int loadSystemsListOnline(void) {
 
     XmListDeleteAllItems(scrolled_systems_list);
     for (i = 0; i < numItems; ++i) {
-        formatUptime(strUptime, sizeof(strUptime), lstSystems[i].uptime);
+        if (!show_all_systems || lstSystems[i].online == 1) {
+            formatUptime(strUptime, sizeof(strUptime), lstSystems[i].uptime);
+        } else {
+            snprintf(strUptime, sizeof(strUptime), "Offline");
+        }
         snprintf(lineBuffer, MAX_SYSTEM_LIST_LINE_LENGTH, "%-15.15s | %-15.15s | %-25.25s | %-25.25s | %s",
             lstSystems[i].username,
             lstSystems[i].modelname,
@@ -531,9 +538,21 @@ int argParser(int argc, char* argv[]) {
     argv[n] = NULL;
     return n;
 }
+/* checkbox in front of "Online: $n" to toggle online/all */
+static void online_toggle_callback(Widget w, XtPointer client_data, XtPointer call_data) {
+    XmToggleButtonCallbackStruct *cbs = (XmToggleButtonCallbackStruct *)call_data;
+    int prev = show_all_systems;
+    show_all_systems = cbs->set ? 0 : 1;
+    if (loadSystemsList() != RESPONSE_OK) {
+        /* keep the shown list and the checkbox consistent */
+        printf("Error: Could not refresh systems list\n");
+        show_all_systems = prev;
+        XmToggleButtonSetState(w, prev ? False : True, False);
+    }
+}
 static void systemlist_refresh_function(XtPointer client_data, XtIntervalId *id) {
     refresh_timeout_id = 0; /* fired, no longer valid */
-    if (loadSystemsListOnline() != RESPONSE_OK) printf("Error: Could not refresh systems list\n");
+    if (loadSystemsList() != RESPONSE_OK) printf("Error: Could not refresh systems list\n");
     refresh_timeout_id = XtAppAddTimeOut(app, REFRESH_INTERVAL, systemlist_refresh_function, client_data);
 }
 void onQuit(void) {
@@ -584,6 +603,7 @@ static void attachScreenshotButton(Widget bar, Widget main_win) {
 static void start_main_window(void) {
     Widget main_win, scrolled_win, main_win_menubar, online_bar;
     Arg args[1];
+    XmString str;
     int rc;
 
     if (show_splash) splash_show(toplevel);
@@ -600,17 +620,33 @@ static void start_main_window(void) {
     /* "Online: $n" and the screenshot button between menubar and system list */
     online_bar = XtVaCreateManagedWidget("online_bar", xmFormWidgetClass, main_win, NULL);
     attachScreenshotButton(online_bar, main_win);
+    str = XmStringCreateLocalized("");
+    chk_online = XtVaCreateManagedWidget(
+        "chk_online", xmToggleButtonWidgetClass, online_bar,
+        XmNtopAttachment, XmATTACH_FORM,
+        XmNbottomAttachment, XmATTACH_FORM,
+        XmNleftAttachment, XmATTACH_FORM,
+        XmNlabelString, str,
+        XmNindicatorType, XmN_OF_MANY,
+        XmNvisibleWhenOff, True,
+        XmNhighlightThickness, 0,
+        XmNspacing, 0,
+        XmNset, show_all_systems ? False : True,
+        NULL);
+    XmStringFree(str);
+    XtAddCallback(chk_online, XmNvalueChangedCallback, online_toggle_callback, NULL);
     lbl_online = XtVaCreateManagedWidget(
         "lbl_online", xmLabelWidgetClass, online_bar,
         XmNtopAttachment, XmATTACH_FORM,
         XmNbottomAttachment, XmATTACH_FORM,
-        XmNleftAttachment, XmATTACH_FORM,
+        XmNleftAttachment, XmATTACH_WIDGET,
+        XmNleftWidget, chk_online,
         XmNalignment, XmALIGNMENT_BEGINNING,
         XmNmarginWidth, 6,
         XmNmarginHeight, 4,
         NULL);
 
-    rc = loadSystemsListOnline();
+    rc = loadSystemsList();
     splash_hide();
     /* do not start if unable to connect */
     if (rc != RESPONSE_OK) {
