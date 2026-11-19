@@ -10,8 +10,11 @@
 #include <GL/glx.h>
 #include <GL/GLwMDrawA.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 
 #define FPS 25
 #define OSD_FONT "-*-helvetica-medium-r-normal--12-*-*-*-p-*-iso8859-1"
@@ -45,6 +48,30 @@ static const BarButton barButtons[] = {
     {346, 19, ACT_TEXTURE}
 };
 #define BAR_BUTTON_COUNT (int)(sizeof(barButtons) / sizeof(barButtons[0]))
+
+#define JOB_TIMEOUT 60000 /* ms, a background request taking longer is killed */
+
+/* Background jobs: cloud API calls in forked child so the animation doesn't stall */
+#define JOB_NONE 0
+#define JOB_MARKERS 1
+#define JOB_SAVEPOS 2
+
+typedef struct {
+    int rc;
+    int hasList; /* 0: keep the current marker list */
+    int cnt;
+    int isRegistered;
+    char username[128];
+    char msg[512];
+} JobResult;
+
+static int jobType = JOB_NONE;
+static pid_t jobPid = -1;
+static long jobStart = 0;
+static char *jobBuf = NULL;
+static size_t jobLen = 0, jobCap = 0;
+static int pendingSave = 0;
+static float pendingLat, pendingLon;
 
 int debug = 0;
 int G_MODE = MODE_DAEMON;
@@ -101,6 +128,8 @@ static int visualAttribs[] = {
 
 static void initTexture(void);
 static void onQuit(void);
+static void startJob(int type, float lat, float lon);
+static void checkJobTimeout(void);
 
 static String fallback_resources[] = {
     "*title: SGINet Globe",
@@ -501,6 +530,7 @@ static void tick(XtPointer client_data, XtIntervalId *id) {
     }
 
     currTime = elapsedMs();
+    checkJobTimeout();
     deltaTime = (currTime - prevTime) / 1000.0f;
     prevTime = currTime;
 
@@ -713,13 +743,8 @@ static void mouseButton(unsigned int button, int pressed, int x, int y) {
     if (button == Button1 && pressed && g_setMyPosition == 2) { /* save position confirmation prompt visible */
         if (yi > 70 && yi < 90) {
             if (x > 40 && x < 105) {
-                char status_msg[512];
                 g_setMyPosition = 0; /* hide dialog */
-                status_msg[0] = '\0';
-                busy_begin();
-                cloudAPI_saveMyPosition(status_msg, g_selectedLat, g_selectedLon);
-                busy_end();
-                addNotification(status_msg, 3.0f);
+                startJob(JOB_SAVEPOS, g_selectedLat, g_selectedLon);
             } else if (x > 120 && x < 185) {
                 g_setMyPosition = 0;
             }
@@ -874,6 +899,7 @@ static void input_cb(Widget w, XtPointer client_data, XtPointer call_data) {
 /* --- application --- */
 static void onQuit(void) {
     if (debug) printf("[xsginet-globe] Shutting down..\n");
+    if (jobPid > 0) kill(jobPid, SIGKILL);
     cloudAPI_freeMarkers(lstMarkers);
     lstMarkers = NULL;
     exit(0);
@@ -1016,26 +1042,202 @@ static int argParser(int argc, char* argv[]) {
     argv[n] = NULL;
     return n;
 }
+/* first load before the window opens, blocking is fine here; refreshes use startJob() */
 static void loadMarkers(void) {
-    float myLat = 0.0f, myLon = 0.0f;
+    if (cloudAPI_getMarkers(&lstMarkers, &isRegistered, username, sizeof(username)) != RESPONSE_OK) {
+        printf("Unable to load markers from sginet\n");
+    }
+}
+
+/* --- background jobs --- */
+static int writeAll(int fd, const void *data, size_t len) {
+    const char *p = (const char *)data;
+    while (len > 0) {
+        ssize_t n = write(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return 0;
+        }
+        p += n;
+        len -= (size_t)n;
+    }
+    return 1;
+}
+/* runs in the forked child: must not touch X/GL, ends with _exit() */
+static void runJobChild(int fd, int type, float lat, float lon) {
+    JobResult res;
+    MarkerList *lst = NULL;
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+    signal(SIGHUP, SIG_DFL);
+
+    memset(&res, 0, sizeof(res));
+    /* start with the current values, like the in-process call would */
+    res.isRegistered = isRegistered;
+    memcpy(res.username, username, sizeof(res.username)); /* same size, both NUL terminated */
+
+    if (type == JOB_MARKERS) {
+        res.rc = cloudAPI_getMarkers(&lst, &res.isRegistered, res.username, sizeof(res.username));
+        if (lst != NULL) {
+            res.hasList = 1;
+            res.cnt = lst->cnt;
+        }
+    } else if (type == JOB_SAVEPOS) {
+        res.rc = cloudAPI_saveMyPosition(res.msg, lat, lon);
+    }
+    res.msg[sizeof(res.msg) - 1] = '\0';
+
+    if (writeAll(fd, &res, sizeof(res)) && res.hasList && res.cnt > 0) {
+        writeAll(fd, lst->lst, sizeof(MarkerEntry) * (size_t)res.cnt);
+    }
+    close(fd);
+    fflush(stdout);
+    fflush(stderr);
+    _exit(0);
+}
+static void applyMarkerResult(const JobResult *res, const MarkerEntry *entries) {
+    MarkerList *newList;
     MarkerEntry *myMarker;
+    float myLat = 0.0f, myLon = 0.0f;
+
+    isRegistered = res->isRegistered;
+    memcpy(username, res->username, sizeof(username));
+    username[sizeof(username) - 1] = '\0'; /* the data came through a pipe, don't trust it */
+    if (res->rc != RESPONSE_OK) {
+        printf("Unable to load markers from sginet\n");
+        return;
+    }
+    if (!res->hasList) return;
+
+    newList = malloc(sizeof(MarkerList));
+    if (newList == NULL) return;
+    newList->cnt = res->cnt;
+    newList->capacity = res->cnt + 1; /* one more entry for the marker the user sets for themselves */
+    newList->lst = calloc(newList->capacity, sizeof(MarkerEntry));
+    if (newList->lst == NULL) {
+        free(newList);
+        return;
+    }
+    if (res->cnt > 0) memcpy(newList->lst, entries, sizeof(MarkerEntry) * (size_t)res->cnt);
+
     /* keep the position the user is just setting, the new list doesn't have it */
     myMarker = g_setMyPosition != 0 ? findMyMarkerEntry() : NULL;
     if (myMarker) {
         myLat = myMarker->lat;
         myLon = myMarker->lon;
     }
-    if (cloudAPI_getMarkers(&lstMarkers, &isRegistered, username, sizeof(username)) != RESPONSE_OK) {
-        printf("Unable to load markers from sginet\n");
-    }
+    cloudAPI_freeMarkers(lstMarkers);
+    lstMarkers = newList;
     if (myMarker && findMyMarkerEntry() == NULL) addMarker("You", MTYPE_THISUSER, myLat, myLon, 1);
+}
+/* the child closed the pipe: check the result and apply it */
+static void finishJob(void) {
+    int type = jobType;
+    const JobResult *res = (const JobResult *)jobBuf;
+    int complete = 0;
+
+    waitpid(jobPid, NULL, 0);
+    jobPid = -1;
+    jobType = JOB_NONE;
+    busy_end();
+
+    if (jobLen >= sizeof(JobResult)) {
+        size_t expected = sizeof(JobResult);
+        if (res->hasList && res->cnt > 0) expected += sizeof(MarkerEntry) * (size_t)res->cnt;
+        complete = res->cnt >= 0 && jobLen == expected;
+    }
+    if (debug) printf("Job %d finished, %lu bytes, complete=%d\n", type, (unsigned long)jobLen, complete);
+
+    if (type == JOB_MARKERS) {
+        if (complete) {
+            applyMarkerResult(res, (const MarkerEntry *)(jobBuf + sizeof(JobResult)));
+        } else {
+            printf("Unable to load markers from sginet\n");
+        }
+    } else if (type == JOB_SAVEPOS) {
+        addNotification(complete ? res->msg : "Failed to save location", 3.0f);
+    }
+    jobLen = 0;
+    g_redrawUI = 1;
+
+    if (pendingSave) {
+        pendingSave = 0;
+        startJob(JOB_SAVEPOS, pendingLat, pendingLon);
+    }
+}
+static void jobInput_cb(XtPointer client_data, int *source, XtInputId *id) {
+    ssize_t n;
+    if (jobCap - jobLen < 4096) {
+        size_t newCap = jobCap * 2 + 8192;
+        char *newBuf = realloc(jobBuf, newCap);
+        if (newBuf == NULL) { /* out of memory: stop reading, the result counts as incomplete */
+            jobLen = 0;
+            goto done;
+        }
+        jobBuf = newBuf;
+        jobCap = newCap;
+    }
+    /* the fd is readable, so one read() doesn't block */
+    n = read(*source, jobBuf + jobLen, jobCap - jobLen);
+    if (n < 0 && errno == EINTR) return;
+    if (n > 0) {
+        jobLen += (size_t)n;
+        return;
+    }
+done:
+    XtRemoveInput(*id);
+    close(*source);
+    finishJob();
+}
+/* only one job at a time, a position save is queued, a marker refresh is skipped */
+static void startJob(int type, float lat, float lon) {
+    int fds[2];
+    pid_t pid;
+    if (jobType != JOB_NONE) {
+        if (type == JOB_SAVEPOS) {
+            pendingSave = 1;
+            pendingLat = lat;
+            pendingLon = lon;
+        }
+        return;
+    }
+    if (pipe(fds) != 0) {
+        perror("pipe");
+        return;
+    }
+    fflush(stdout); /* don't let the child flush the parent's buffered output again */
+    fflush(stderr);
+    pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        close(fds[0]);
+        close(fds[1]);
+        if (type == JOB_SAVEPOS) addNotification("Failed to save location", 3.0f);
+        return;
+    }
+    if (pid == 0) {
+        close(fds[0]);
+        runJobChild(fds[1], type, lat, lon); /* does not return */
+    }
+    close(fds[1]);
+    jobType = type;
+    jobPid = pid;
+    jobStart = elapsedMs();
+    jobLen = 0;
+    XtAppAddInput(app, fds[0], (XtPointer)XtInputReadMask, jobInput_cb, NULL);
+    busy_begin();
+}
+/* a hanging request would block all later jobs; killing the child closes the pipe */
+static void checkJobTimeout(void) {
+    if (jobPid > 0 && elapsedMs() - jobStart > JOB_TIMEOUT) {
+        if (debug) printf("Job %d timed out, killing pid %d\n", jobType, (int)jobPid);
+        kill(jobPid, SIGKILL);
+        jobStart = elapsedMs(); /* no repeated kills while waiting for the pipe to close */
+    }
 }
 static void refreshMarkerData(XtPointer client_data, XtIntervalId *id) {
     if (debug) printf("Chronos: Updating markers\n");
-    busy_begin();
-    loadMarkers();
-    busy_end();
-    g_redrawUI = 1;
+    startJob(JOB_MARKERS, 0.0f, 0.0f);
     XtAppAddTimeOut(app, MARKER_REFRESH_INTERVAL, refreshMarkerData, NULL);
 }
 static void initAppData(void) {
