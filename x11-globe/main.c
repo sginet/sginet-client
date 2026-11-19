@@ -5,6 +5,8 @@
 #include <Xm/Xm.h>
 #include <Xm/Protocols.h>
 #include <X11/cursorfont.h>
+#include <X11/Xutil.h>
+#include <X11/keysym.h>
 #include <GL/glx.h>
 #include <GL/GLwMDrawA.h>
 #include <sys/time.h>
@@ -21,6 +23,28 @@
 #define MARKER_REFRESH_INTERVAL 300000 /* ms */
 #define BOTTOM_BAR_HEIGHT 22
 #define TEX_CLAMP_TO_EDGE 0x812F /* GL_CLAMP_TO_EDGE (OpenGL 1.2) = GL_CLAMP_TO_EDGE_SGIS */
+#define TILT_LIMIT 80.0f /* max. tilt (degrees), keeps the globe from turning upside down */
+#define DEFAULT_TILT 25.0f
+#define DEFAULT_ROT_X 160.0f
+#define DEFAULT_AUTOROTATE 0.1f
+#define KEY_ROT_STEP 5.0f
+#define ZOOM_FACTOR 0.9f /* per zoom step, applied to the distance from the surface */
+
+/* Actions shared by bottom bar buttons and keyboard shortcuts */
+enum { ACT_ZOOM_IN, ACT_ZOOM_OUT, ACT_SETPOS, ACT_CITIES, ACT_USERS, ACT_TEXTURE, ACT_PAUSE, ACT_RESET };
+
+typedef struct {
+    int x, w, act;
+} BarButton;
+static const BarButton barButtons[] = {
+    {50, 15, ACT_ZOOM_IN},
+    {68, 15, ACT_ZOOM_OUT},
+    {100, 103, ACT_SETPOS},
+    {256, 40, ACT_CITIES},
+    {301, 40, ACT_USERS},
+    {346, 19, ACT_TEXTURE}
+};
+#define BAR_BUTTON_COUNT (int)(sizeof(barButtons) / sizeof(barButtons[0]))
 
 int debug = 0;
 int G_MODE = MODE_DAEMON;
@@ -43,8 +67,10 @@ static int dragging = 0;
 static int g_wireframe = 1; /* start in wireframe mode, -t or the T/W button for textures */
 static int textureLoaded = 0; /* the texture is loaded when textured mode is used the first time */
 static int g_redrawUI = 1;
-static float rotX = 160.0f, rotY = 50.0f, zoom = 12.0f;
-static float rotYdiff = 0.0f, rotXdiff = 0.1f;
+static float rotX = DEFAULT_ROT_X, rotY = DEFAULT_TILT, zoom = 12.0f;
+static float rotYdiff = 0.0f, rotXdiff = DEFAULT_AUTOROTATE;
+static int paused = 0;
+static float pausedRotXdiff = 0.0f;
 static float minZoom = 5.0f, maxZoom = 1.2f, defaultZoom = 2.2f;
 static int g_setMyPosition = 0; /* 1=set mode, 2=confirm position set overlay */
 static float g_selectedLat, g_selectedLon;
@@ -74,6 +100,7 @@ static int visualAttribs[] = {
 };
 
 static void initTexture(void);
+static void onQuit(void);
 
 static String fallback_resources[] = {
     "*title: SGINet Globe",
@@ -297,7 +324,28 @@ static void draw_marker_labels(void) {
         }
     }
 }
+static void setColor(float *c, float r, float g, float b) {
+    c[0] = r; c[1] = g; c[2] = b;
+}
+/* label and text color of a bottom bar button, depending on current state */
+static const char *buttonLabel(int act, float *color) {
+    setColor(color, 1.0f, 1.0f, 1.0f);
+    switch (act) {
+    case ACT_ZOOM_IN: return "+";
+    case ACT_ZOOM_OUT: return "-";
+    case ACT_SETPOS: return isRegistered == 1 ? "Set your location" : "Unregistered";
+    case ACT_CITIES:
+        if (g_showCities) setColor(color, 0.0f, 1.0f, 0.0f); else setColor(color, 0.7f, 0.7f, 0.7f);
+        return "Cities";
+    case ACT_USERS:
+        if (g_showUsers) setColor(color, 0.0f, 1.0f, 0.0f); else setColor(color, 0.7f, 0.7f, 0.7f);
+        return "Users";
+    case ACT_TEXTURE: return g_wireframe == 1 ? "W" : "T";
+    default: return "";
+    }
+}
 static void draw_bottom_bar(void) {
+    int i;
     setOrtho2D();
 
     /* main bottom bar background */
@@ -305,47 +353,28 @@ static void draw_bottom_bar(void) {
 
     glColor3f(0.0f, 0.0f, 0.0f);
     drawString("Zoom:", 12, 7);
-
-    /* zoom control buttons */
-    draw_rectangle(50, 4, 15, 14, 0.0f, 0.0f, 0.0f, 1.0f); /* zoom in */
-    draw_rectangle(68, 4, 15, 14, 0.0f, 0.0f, 0.0f, 1.0f); /* zoom out */
-
-    /* "set your location" button */
-    if (g_setMyPosition == 1) {
-        draw_rectangle(100, 4, 103, 14, 0.6f, 0.0f, 0.0f, 1.0f);
-    } else {
-        draw_rectangle(100, 4, 103, 14, 0.0f, 0.0f, 0.0f, 1.0f);
-    }
-
-    glColor3f(0.0f, 0.0f, 0.0f);
     drawString("Show:", 215, 7);
-    draw_rectangle(256, 4, 40, 14, 0.0f, 0.0f, 0.0f, 1.0f); /* Cities */
-    draw_rectangle(301, 4, 40, 14, 0.0f, 0.0f, 0.0f, 1.0f); /* Users */
-    draw_rectangle(346, 4, 19, 14, 0.0f, 0.0f, 0.0f, 1.0f); /* Wireframe/Texture */
 
-    /* -- now add labels on top of buttons (depth test is off, drawing order decides) -- */
-    glColor3f(1.0f, 1.0f, 1.0f);
-    drawString("+", 54, 8);
-    drawString("-", 72, 8);
+    for (i = 0; i < BAR_BUTTON_COUNT; i++) {
+        const BarButton *b = &barButtons[i];
+        const char *label;
+        float color[3];
+        int textX;
+        if (b->act == ACT_SETPOS && g_setMyPosition == 1) {
+            draw_rectangle((float)b->x, 4, (float)b->w, 14, 0.6f, 0.0f, 0.0f, 1.0f);
+        } else {
+            draw_rectangle((float)b->x, 4, (float)b->w, 14, 0.0f, 0.0f, 0.0f, 1.0f);
+        }
+        /* label on top of the button (depth test is off, drawing order decides) */
+        label = buttonLabel(b->act, color);
+        textX = b->x + (b->w - getStringWidth(label)) / 2;
+        glColor3fv(color);
+        drawString(label, textX, 7);
+    }
 
     if (isRegistered == 1) {
-        drawString("Set your location", 104, 7);
+        glColor3f(1.0f, 1.0f, 1.0f);
         drawString(username, 380, 7);
-    } else {
-        drawString("Unregistered", 104, 7);
-    }
-
-    if (g_showCities == 1) glColor3f(0.0f, 1.0f, 0.0f); else glColor3f(0.7f, 0.7f, 0.7f);
-    drawString("Cities", 260, 7);
-
-    if (g_showUsers == 1) glColor3f(0.0f, 1.0f, 0.0f); else glColor3f(0.7f, 0.7f, 0.7f);
-    drawString("Users", 305, 7);
-
-    glColor3f(1.0f, 1.0f, 1.0f);
-    if (g_wireframe == 1) {
-        drawString("W", 350, 7);
-    } else {
-        drawString("T", 352, 7);
     }
 }
 static void drawSetMyPositionConfirmationOverlay(void) {
@@ -395,7 +424,7 @@ static void display(void) {
               0.0, 0.0, 0.0,   /* center of scene */
               0.0, 1.0, 0.0);  /* up */
 
-    glRotatef(rotY, 1, 1, 0);
+    glRotatef(rotY, 1, 0, 0); /* tilt around the horizontal screen axis */
     glRotatef(rotX, 0, 1, 0);
     captureMatrices();
 
@@ -447,6 +476,17 @@ static void display(void) {
     GLwDrawingAreaSwapBuffers(glw);
 }
 
+static void normalizeRotation(void) {
+    if (rotX >= 360.0f) rotX -= 360.0f;
+    else if (rotX < 0.0f) rotX += 360.0f;
+    if (rotY > TILT_LIMIT) {
+        rotY = TILT_LIMIT;
+        rotYdiff = 0.0f;
+    } else if (rotY < -TILT_LIMIT) {
+        rotY = -TILT_LIMIT;
+        rotYdiff = 0.0f;
+    }
+}
 static void tick(XtPointer client_data, XtIntervalId *id) {
     long currTime, delay;
     float deltaTime;
@@ -454,10 +494,10 @@ static void tick(XtPointer client_data, XtIntervalId *id) {
     if (dragging != 1) {
         rotY += rotYdiff;
         rotX += rotXdiff;
-        if (rotX > 360.0f) rotX -= 360.0f;
-        else if (rotX < 0.0f) rotX += 360.0f;
-        if (rotY > 360.0f) rotY -= 360.0f;
-        else if (rotY < 0.0f) rotY += 360.0f;
+        /* tilt momentum fades out, the spin keeps going */
+        rotYdiff *= 0.9f;
+        if (fabs(rotYdiff) < 0.01f) rotYdiff = 0.0f;
+        normalizeRotation();
     }
 
     currTime = elapsedMs();
@@ -507,41 +547,107 @@ static void mouseMotion(int x, int y) {
 
     rotY += rotYdiff;
     rotX += rotXdiff;
-
-    if (rotX > 360.0f) rotX -= 360.0f;
-    else if (rotX < 0.0f) rotX += 360.0f;
-
-    if (rotY > 360.0f) rotY -= 360.0f;
-    else if (rotY < 0.0f) rotY += 360.0f;
+    normalizeRotation();
+    paused = 0; /* dragging sets a new spin */
 
     lastMouseX = x;
     lastMouseY = y;
     g_redrawUI = 1;
 }
+/* zoom is the eye distance from the globe center, steps scale the distance from the surface */
 static void zoomView(int zoomIn) {
-    if (zoomIn == 1) zoom -= 0.1f; else zoom += 0.1f;
+    if (zoomIn == 1) {
+        zoom = RADIUS + (zoom - RADIUS) * ZOOM_FACTOR;
+    } else {
+        zoom = RADIUS + (zoom - RADIUS) / ZOOM_FACTOR;
+    }
     if (zoom < maxZoom) zoom = maxZoom;
     if (zoom > minZoom) zoom = minZoom;
     if (debug) printf("Zoom: %f\n", zoom);
 }
-static void onBottomBarClick(int x) {
-    if (x >= 50 && x <= 64) {
+static void doAction(int act) {
+    switch (act) {
+    case ACT_ZOOM_IN:
         zoomView(1);
-    } else if (x >= 68 && x <= 82) {
+        break;
+    case ACT_ZOOM_OUT:
         zoomView(0);
-    } else if (x >= 100 && x <= 200) {
+        break;
+    case ACT_SETPOS:
         if (isRegistered == 0) {
             addNotification("To submit your location, this machine must be registered on sginet first", 5.0f);
         } else {
             g_setMyPosition = g_setMyPosition == 1 ? 0 : 1;
         }
-    } else if (x >= 256 && x <= 296) {
-        g_showCities = g_showCities == 1 ? 0 : 1;
-    } else if (x >= 301 && x <= 341) {
-        g_showUsers = g_showUsers == 1 ? 0 : 1;
-    } else if (x >= 346 && x <= 365) {
-        g_wireframe = g_wireframe == 1 ? 0 : 1;
+        break;
+    case ACT_CITIES:
+        g_showCities = !g_showCities;
+        break;
+    case ACT_USERS:
+        g_showUsers = !g_showUsers;
+        break;
+    case ACT_TEXTURE:
+        g_wireframe = !g_wireframe;
+        break;
+    case ACT_PAUSE:
+        if (paused) {
+            rotXdiff = pausedRotXdiff != 0.0f ? pausedRotXdiff : DEFAULT_AUTOROTATE;
+            paused = 0;
+        } else {
+            pausedRotXdiff = rotXdiff;
+            rotXdiff = 0.0f;
+            rotYdiff = 0.0f;
+            paused = 1;
+        }
+        break;
+    case ACT_RESET:
+        rotX = DEFAULT_ROT_X;
+        rotY = DEFAULT_TILT;
+        zoom = defaultZoom;
+        rotXdiff = DEFAULT_AUTOROTATE;
+        rotYdiff = 0.0f;
+        paused = 0;
+        break;
+    default:
+        break;
     }
+    g_redrawUI = 1;
+}
+static void onBottomBarClick(int x) {
+    int i;
+    for (i = 0; i < BAR_BUTTON_COUNT; i++) {
+        if (x >= barButtons[i].x && x <= barButtons[i].x + barButtons[i].w) {
+            doAction(barButtons[i].act);
+            return;
+        }
+    }
+}
+static void keyPress(XKeyEvent *kev) {
+    KeySym sym;
+    char buf[8];
+    XLookupString(kev, buf, sizeof(buf), &sym, NULL);
+    switch (sym) {
+    case XK_Left:  rotX -= KEY_ROT_STEP; break;
+    case XK_Right: rotX += KEY_ROT_STEP; break;
+    case XK_Up:    rotY += KEY_ROT_STEP; break;
+    case XK_Down:  rotY -= KEY_ROT_STEP; break;
+    case XK_plus: case XK_equal: case XK_KP_Add:
+        doAction(ACT_ZOOM_IN); break;
+    case XK_minus: case XK_KP_Subtract:
+        doAction(ACT_ZOOM_OUT); break;
+    case XK_space: doAction(ACT_PAUSE); break;
+    case XK_w: case XK_W: case XK_t: case XK_T:
+        doAction(ACT_TEXTURE); break;
+    case XK_c: case XK_C: doAction(ACT_CITIES); break;
+    case XK_u: case XK_U: doAction(ACT_USERS); break;
+    case XK_Home: case XK_r: case XK_R:
+        doAction(ACT_RESET); break;
+    case XK_q: case XK_Q: case XK_Escape:
+        onQuit(); break;
+    default:
+        return;
+    }
+    normalizeRotation();
     g_redrawUI = 1;
 }
 /* Pick the clicked point on the globe, using the matrices of the frame the user saw */
@@ -742,10 +848,19 @@ static void input_cb(Widget w, XtPointer client_data, XtPointer call_data) {
     GLwDrawingAreaCallbackStruct *cb = (GLwDrawingAreaCallbackStruct *)call_data;
     XEvent *ev = cb->event;
     switch (ev->type) {
+    case KeyPress:
+        keyPress(&ev->xkey);
+        break;
     case ButtonPress:
+        if (ev->xbutton.button == Button4 || ev->xbutton.button == Button5) { /* mouse wheel */
+            zoomView(ev->xbutton.button == Button4);
+            g_redrawUI = 1;
+            break;
+        }
         mouseButton(ev->xbutton.button, 1, ev->xbutton.x, ev->xbutton.y);
         break;
     case ButtonRelease:
+        if (ev->xbutton.button == Button4 || ev->xbutton.button == Button5) break;
         mouseButton(ev->xbutton.button, 0, ev->xbutton.x, ev->xbutton.y);
         break;
     case MotionNotify:
@@ -826,6 +941,11 @@ static void error_usage(void) {
     fprintf(stderr, "  -r  print version\n");
     fprintf(stderr, "  -d  debug mode\n");
     fprintf(stderr, "  --lat x.xxxx --lng x.xxxx  set your position to latitude/longitude value\n");
+    fprintf(stderr, "\nKeys:\n");
+    fprintf(stderr, "  arrows  rotate          +/- or wheel  zoom\n");
+    fprintf(stderr, "  space   pause rotation  w/t           wireframe/textures\n");
+    fprintf(stderr, "  c       toggle cities   u             toggle users\n");
+    fprintf(stderr, "  r/Home  reset view      q/ESC         quit\n");
     if (debug) {
         fprintf(stderr, "  --ca-cert-bundle PATH  add CA certificates from a PEM bundle\n");
         fprintf(stderr, "  --sginet-bin PATH      xsginet-globe binary for updater\n");
@@ -996,11 +1116,22 @@ int main(int argc, char** argv) {
         GLwNvisualInfo, visinfo,
         XmNwidth, winWidth,
         XmNheight, winHeight,
+        XmNtraversalOn, True, /* receive key events */
         NULL);
     XtAddCallback(glw, GLwNginitCallback, ginit_cb, NULL);
     XtAddCallback(glw, GLwNexposeCallback, expose_cb, NULL);
     XtAddCallback(glw, GLwNresizeCallback, resize_cb, NULL);
     XtAddCallback(glw, GLwNinputCallback, input_cb, NULL);
+    /*
+     * With traversal on, Motif binds the arrow keys (and Home) to focus traversal,
+     * so they never reach glwInput(). Bind them back to the input callback.
+     */
+    XtOverrideTranslations(glw, XtParseTranslationTable(
+        "<Key>osfLeft: glwInput()\n"
+        "<Key>osfRight: glwInput()\n"
+        "<Key>osfUp: glwInput()\n"
+        "<Key>osfDown: glwInput()\n"
+        "<Key>osfBeginLine: glwInput()\n"));
 
     /* quit when the window is closed */
     wmDelete = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
@@ -1012,6 +1143,7 @@ int main(int argc, char** argv) {
     initAppData();
 
     XtRealizeWidget(toplevel);
+    XmProcessTraversal(glw, XmTRAVERSE_CURRENT); /* keyboard focus to the globe */
     prevTime = elapsedMs();
 
     XtAppAddTimeOut(app, 1000 / FPS, tick, NULL);
