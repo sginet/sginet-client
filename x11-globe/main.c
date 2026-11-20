@@ -963,21 +963,24 @@ static void error_usage(void) {
     fprintf(stderr, "  -b  use linear (blurred) textures\n");
     fprintf(stderr, "  -n  disable starfield\n");
     fprintf(stderr, "  -u  check for new version and upgrade\n");
-    fprintf(stderr, "  -i  show SYSID\n");
     fprintf(stderr, "  -r  print version\n");
+    fprintf(stderr, "  -k  show keyboard controls\n");
     fprintf(stderr, "  -d  debug mode\n");
+    if (debug) fprintf(stderr, "  -i  show SYSID\n");
     fprintf(stderr, "  --lat x.xxxx --lng x.xxxx  set your position to latitude/longitude value\n");
-    fprintf(stderr, "\nKeys:\n");
-    fprintf(stderr, "  arrows  rotate          +/- or wheel  zoom\n");
-    fprintf(stderr, "  space   pause rotation  w/t           wireframe/textures\n");
-    fprintf(stderr, "  c       toggle cities   u             toggle users\n");
-    fprintf(stderr, "  r/Home  reset view      q/ESC         quit\n");
     if (debug) {
         fprintf(stderr, "  --ca-cert-bundle PATH  add CA certificates from a PEM bundle\n");
         fprintf(stderr, "  --sginet-bin PATH      xsginet-globe binary for updater\n");
     }
     fprintf(stderr, "\n");
     exit(EXIT_FAILURE);
+}
+static void printKeys(void) {
+    printf("Keyboard controls:\n");
+    printf("  arrows  rotate          +/- or wheel  zoom\n");
+    printf("  space   pause rotation  w/t           wireframe/textures\n");
+    printf("  c       toggle cities   u             toggle users\n");
+    printf("  r/Home  reset view      q/ESC         quit\n");
 }
 /*
  * Handles our own options and removes them from argv, everything else is
@@ -991,6 +994,9 @@ static int argParser(int argc, char* argv[]) {
         char *a = argv[i];
         if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) {
             error_usage();
+        } else if (strcmp(a, "-k") == 0) {
+            printKeys();
+            exit(EXIT_SUCCESS);
         } else if (strcmp(a, "-d") == 0) {
             debug = 1;
         } else if (strcmp(a, "-n") == 0) {
